@@ -2,16 +2,17 @@ Attribute VB_Name = "Modulo_Importador"
 Option Explicit
 
 ' ============================================================
-'  IMPORTADOR MAESTRO / ESCLAVO
-'  - Maestro : CSV  (headers fila buscada din�micamente)
-'              campo clave: columna que contenga "NISS"
-'  - Esclavo : XLSX (dos filas header buscadas din�micamente)
-'              fila c�digos: A001, A002...
-'              fila labels : Name, Nif...
-'              campo clave: columna que contenga "NIKCODE"
+'  IMPORTADOR MAESTRO / ESCLAVO  v2
+'  - Maestro : CSV  separador ";"
+'              campo clave: columna que contenga "NISS"  -> texto (ceros izq.)
+'  - Esclavo : XLSX
+'              fila codigos: A001, A002...
+'              fila labels : Name, Nif...  (fila anterior a codigos)
+'              campo clave: columna que contenga "NIC CODE" (con o sin espacio)
 '  - Output  : libro activo, dos hojas ("MAESTRO" y "ESCLAVO")
-'              el esclavo se reordena seg�n columnas del maestro
-'              columnas sin equivalente en maestro se descartan
+'              AMBAS hojas usan los mismos headers (= headers del MAESTRO)
+'              el esclavo se reordena segun columnas del maestro
+'              columnas del esclavo sin equivalente en maestro se descartan
 ' ============================================================
 
 Public Sub ImportarMaestroEsclavo()
@@ -19,11 +20,9 @@ Public Sub ImportarMaestroEsclavo()
     Dim sRutaMaestro As String
     Dim sRutaEsclavo As String
 
-    ' --- Seleccionar CSV Maestro ---
     sRutaMaestro = SeleccionarFichero("Selecciona el CSV Maestro", "CSV (*.csv),*.csv")
     If sRutaMaestro = "" Then MsgBox "Cancelado.", vbInformation: Exit Sub
 
-    ' --- Seleccionar Excel Esclavo ---
     sRutaEsclavo = SeleccionarFichero("Selecciona el Excel Esclavo", "Excel (*.xlsx;*.xls;*.xlsm),*.xlsx;*.xls;*.xlsm")
     If sRutaEsclavo = "" Then MsgBox "Cancelado.", vbInformation: Exit Sub
 
@@ -32,46 +31,41 @@ Public Sub ImportarMaestroEsclavo()
 
     On Error GoTo ErrHandler
 
-    ' ---- PASO 1: Cargar CSV Maestro en memoria ----
+    ' ---- PASO 1: CSV Maestro ----
     Dim arrMaestro() As String
     Dim nFilasMaestro As Long
     arrMaestro = LeerCSV(sRutaMaestro, nFilasMaestro)
 
-    ' Buscar fila de headers en maestro (primera fila no vac�a)
     Dim iHeaderMaestro As Long
     iHeaderMaestro = BuscarFilaHeader(arrMaestro, nFilasMaestro)
     If iHeaderMaestro < 0 Then
-        MsgBox "No se encontr� fila de headers en el Maestro.", vbCritical: GoTo Salir
+        MsgBox "No se encontro fila de headers en el Maestro.", vbCritical: GoTo Salir
     End If
 
-    ' Construir diccionario de columnas maestro: c�digo (CA001) -> �ndice columna (0-based)
-    Dim nColsMaestro As Long
     Dim arrHeaderMaestro() As String
-    arrHeaderMaestro = Split(arrMaestro(iHeaderMaestro), ";")
+    arrHeaderMaestro = SplitCSVLine(arrMaestro(iHeaderMaestro))
+    Dim nColsMaestro As Long
     nColsMaestro = UBound(arrHeaderMaestro) + 1
 
-    ' Buscar columna NISS en maestro
     Dim iNissMaestro As Long
     iNissMaestro = BuscarColumnaEnArray(arrHeaderMaestro, "NISS")
     If iNissMaestro < 0 Then
-        MsgBox "No se encontr� columna 'NISS' en el Maestro.", vbCritical: GoTo Salir
+        MsgBox "No se encontro columna 'NISS' en el Maestro.", vbCritical: GoTo Salir
     End If
 
-    ' ---- PASO 2: Cargar Excel Esclavo ----
+    ' ---- PASO 2: Excel Esclavo ----
     Dim wbEsclavo As Workbook
     Set wbEsclavo = Workbooks.Open(sRutaEsclavo, ReadOnly:=True)
     Dim wsEsclavo As Worksheet
     Set wsEsclavo = wbEsclavo.Sheets(1)
 
-    ' Buscar fila de c�digos (A001, A002...) y fila de labels
     Dim iFilaCodigos As Long, iFilaLabels As Long
     BuscarFilasEsclavo wsEsclavo, iFilaCodigos, iFilaLabels
     If iFilaCodigos < 0 Then
         wbEsclavo.Close False
-        MsgBox "No se encontr� fila de c�digos (Axxx) en el Esclavo.", vbCritical: GoTo Salir
+        MsgBox "No se encontro fila de codigos (Axxx) en el Esclavo.", vbCritical: GoTo Salir
     End If
 
-    ' Leer headers del esclavo
     Dim nColsEsclavo As Long
     nColsEsclavo = wsEsclavo.Cells(iFilaCodigos, wsEsclavo.Columns.Count).End(xlToLeft).Column
     Dim arrCodEsclavo() As String
@@ -86,31 +80,28 @@ Public Sub ImportarMaestroEsclavo()
         End If
     Next c
 
-    ' Buscar columna NIKCODE en esclavo
+    ' Buscar NIC CODE: probar exacto sin espacio, luego parcial "NIC"
     Dim iNikkodeEsclavo As Long
-    iNikkodeEsclavo = BuscarColumnaEnArrayBase1(arrCodEsclavo, "NIKCODE", nColsEsclavo)
-    If iNikkodeEsclavo < 0 Then
-        ' Intentar tambi�n en fila labels
-        iNikkodeEsclavo = BuscarColumnaEnArrayBase1(arrLblEsclavo, "NIKCODE", nColsEsclavo)
-    End If
+    iNikkodeEsclavo = BuscarColumnaFlexible(arrCodEsclavo, "NICCODE", nColsEsclavo)
+    If iNikkodeEsclavo < 0 Then iNikkodeEsclavo = BuscarColumnaFlexible(arrLblEsclavo, "NICCODE", nColsEsclavo)
+    If iNikkodeEsclavo < 0 Then iNikkodeEsclavo = BuscarColumnaEnArrayBase1(arrCodEsclavo, "NIC", nColsEsclavo)
+    If iNikkodeEsclavo < 0 Then iNikkodeEsclavo = BuscarColumnaEnArrayBase1(arrLblEsclavo, "NIC", nColsEsclavo)
     If iNikkodeEsclavo < 0 Then
         wbEsclavo.Close False
-        MsgBox "No se encontr� columna 'NIKCODE' en el Esclavo.", vbCritical: GoTo Salir
+        MsgBox "No se encontro columna 'NIC CODE' en el Esclavo." & vbCrLf & _
+               "Revisa el nombre exacto de la columna clave.", vbCritical
+        GoTo Salir
     End If
 
-    ' ---- PASO 3: Construir mapa de reordenaci�n ----
-    ' Para cada columna del maestro (CA001), quitar C -> A001, buscar en esclavo
-    ' Resultado: arrMapEsclavo(i) = columna en esclavo que corresponde a columna i del maestro
-    '            -1 si no existe
+    ' ---- PASO 3: Mapa de reordenacion CA001->A001 ----
     Dim arrMapEsclavo() As Long
     ReDim arrMapEsclavo(0 To nColsMaestro - 1)
     Dim i As Long
     For i = 0 To nColsMaestro - 1
         Dim sCodMaestro As String
         sCodMaestro = Trim(arrHeaderMaestro(i))
-        ' Quitar la C inicial: CA001 -> A001
         Dim sBuscado As String
-        If Left(sCodMaestro, 1) = "C" Or Left(sCodMaestro, 1) = "c" Then
+        If UCase(Left(sCodMaestro, 1)) = "C" Then
             sBuscado = Mid(sCodMaestro, 2)
         Else
             sBuscado = sCodMaestro
@@ -118,32 +109,36 @@ Public Sub ImportarMaestroEsclavo()
         arrMapEsclavo(i) = BuscarColumnaEnArrayBase1(arrCodEsclavo, sBuscado, nColsEsclavo)
     Next i
 
-    ' ---- PASO 4: Preparar hojas de salida en el libro activo ----
-    Dim wbSalida As Workbook
-    Set wbSalida = ThisWorkbook
-
+    ' ---- PASO 4: Hojas de salida ----
     Dim wsM As Worksheet, wsE As Worksheet
-    Set wsM = ObtenerOCrearHoja(wbSalida, "MAESTRO")
-    Set wsE = ObtenerOCrearHoja(wbSalida, "ESCLAVO")
-
+    Set wsM = ObtenerOCrearHoja(ThisWorkbook, "MAESTRO")
+    Set wsE = ObtenerOCrearHoja(ThisWorkbook, "ESCLAVO")
     wsM.Cells.ClearContents
     wsE.Cells.ClearContents
 
-    ' ---- PASO 5: Volcar Maestro ----
-    ' Header maestro en fila 1
+    ' Formato texto en toda la hoja para preservar ceros iniciales
+    wsM.Cells.NumberFormat = "@"
+    wsE.Cells.NumberFormat = "@"
+
+    ' ---- PASO 5: Headers identicos en ambas hojas (del MAESTRO) ----
     Dim j As Long
     For j = 0 To nColsMaestro - 1
+        wsM.Cells(1, j + 1).NumberFormat = "General"
         wsM.Cells(1, j + 1).Value = arrHeaderMaestro(j)
+        wsE.Cells(1, j + 1).NumberFormat = "General"
+        wsE.Cells(1, j + 1).Value = arrHeaderMaestro(j)
     Next j
+    wsM.Rows(1).Font.Bold = True
+    wsE.Rows(1).Font.Bold = True
 
-    ' Datos maestro
+    ' ---- PASO 6: Datos Maestro ----
     Dim iFilaSalidaM As Long
     iFilaSalidaM = 2
     Dim r As Long
     For r = iHeaderMaestro + 1 To nFilasMaestro - 1
         If Len(Trim(arrMaestro(r))) = 0 Then GoTo SiguienteFilaMaestro
         Dim arrFila() As String
-        arrFila = Split(arrMaestro(r), ";")
+        arrFila = SplitCSVLine(arrMaestro(r))
         For j = 0 To nColsMaestro - 1
             If j <= UBound(arrFila) Then
                 wsM.Cells(iFilaSalidaM, j + 1).Value = arrFila(j)
@@ -153,23 +148,7 @@ Public Sub ImportarMaestroEsclavo()
 SiguienteFilaMaestro:
     Next r
 
-    ' ---- PASO 6: Volcar Esclavo reordenado ----
-    ' Header esclavo en fila 1 (labels si existen, si no c�digos)
-    For j = 0 To nColsMaestro - 1
-        Dim iColE As Long
-        iColE = arrMapEsclavo(j)
-        If iColE > 0 Then
-            If iFilaLabels > 0 And Len(arrLblEsclavo(iColE)) > 0 Then
-                wsE.Cells(1, j + 1).Value = arrLblEsclavo(iColE)
-            Else
-                wsE.Cells(1, j + 1).Value = arrCodEsclavo(iColE)
-            End If
-        Else
-            wsE.Cells(1, j + 1).Value = arrHeaderMaestro(j) & " [N/D]"
-        End If
-    Next j
-
-    ' Datos esclavo: primera fila de datos es la siguiente despu�s del mayor de iFilaCodigos/iFilaLabels
+    ' ---- PASO 7: Datos Esclavo reordenado ----
     Dim iInicioData As Long
     iInicioData = iFilaCodigos
     If iFilaLabels > iInicioData Then iInicioData = iFilaLabels
@@ -181,11 +160,13 @@ SiguienteFilaMaestro:
     Dim iFilaSalidaE As Long
     iFilaSalidaE = 2
     Dim rE As Long
+    Dim iColE As Long
     For rE = iInicioData To iUltimaFilaE
         For j = 0 To nColsMaestro - 1
             iColE = arrMapEsclavo(j)
             If iColE > 0 Then
-                wsE.Cells(iFilaSalidaE, j + 1).Value = wsEsclavo.Cells(rE, iColE).Value
+                wsE.Cells(iFilaSalidaE, j + 1).Value = _
+                    Trim(CStr(wsEsclavo.Cells(rE, iColE).Value))
             End If
         Next j
         iFilaSalidaE = iFilaSalidaE + 1
@@ -193,16 +174,14 @@ SiguienteFilaMaestro:
 
     wbEsclavo.Close False
 
-    ' ---- Formato m�nimo ----
-    With wsM.Rows(1).Font: .Bold = True: End With
-    With wsE.Rows(1).Font: .Bold = True: End With
-
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
 
-    MsgBox "Importaci�n completada." & vbCrLf & _
-           "  Maestro : " & iFilaSalidaM - 2 & " filas volcadas en hoja MAESTRO" & vbCrLf & _
-           "  Esclavo : " & iFilaSalidaE - 2 & " filas volcadas en hoja ESCLAVO", vbInformation
+    MsgBox "Importacion completada." & vbCrLf & _
+           "  Maestro : " & iFilaSalidaM - 2 & " filas  ->  hoja MAESTRO" & vbCrLf & _
+           "  Esclavo : " & iFilaSalidaE - 2 & " filas  ->  hoja ESCLAVO" & vbCrLf & vbCrLf & _
+           "  Col. NISS     (Maestro) : col. " & iNissMaestro + 1 & vbCrLf & _
+           "  Col. NIC CODE (Esclavo) : col. " & iNikkodeEsclavo, vbInformation
     Exit Sub
 
 ErrHandler:
@@ -233,7 +212,6 @@ End Function
 Private Function LeerCSV(sRuta As String, ByRef nFilas As Long) As String()
     Dim iFile As Integer
     iFile = FreeFile
-    Dim sContenido As String
     Open sRuta For Input As #iFile
     Dim sLinea As String
     Dim arr() As String
@@ -249,8 +227,38 @@ Private Function LeerCSV(sRuta As String, ByRef nFilas As Long) As String()
     LeerCSV = arr
 End Function
 
+' Divide linea CSV por ";" respetando campos entre comillas dobles
+Private Function SplitCSVLine(sLinea As String) As String()
+    Dim arrResult() As String
+    ReDim arrResult(0 To 199)
+    Dim nCols As Long
+    nCols = 0
+    Dim sCampo As String
+    sCampo = ""
+    Dim bEnComillas As Boolean
+    bEnComillas = False
+    Dim i As Long
+    Dim ch As String
+    For i = 1 To Len(sLinea)
+        ch = Mid(sLinea, i, 1)
+        If ch = """" Then
+            bEnComillas = Not bEnComillas
+        ElseIf ch = ";" And Not bEnComillas Then
+            If nCols > UBound(arrResult) Then ReDim Preserve arrResult(0 To UBound(arrResult) + 100)
+            arrResult(nCols) = sCampo
+            nCols = nCols + 1
+            sCampo = ""
+        Else
+            sCampo = sCampo & ch
+        End If
+    Next i
+    If nCols > UBound(arrResult) Then ReDim Preserve arrResult(0 To nCols)
+    arrResult(nCols) = sCampo
+    ReDim Preserve arrResult(0 To nCols)
+    SplitCSVLine = arrResult
+End Function
+
 Private Function BuscarFilaHeader(arr() As String, nFilas As Long) As Long
-    ' Devuelve el �ndice (0-based) de la primera fila no vac�a
     Dim i As Long
     For i = 0 To nFilas - 1
         If Len(Trim(arr(i))) > 0 Then
@@ -261,8 +269,8 @@ Private Function BuscarFilaHeader(arr() As String, nFilas As Long) As Long
     BuscarFilaHeader = -1
 End Function
 
+' 0-based, parcial, case-insensitive
 Private Function BuscarColumnaEnArray(arr() As String, sBuscar As String) As Long
-    ' B�squeda 0-based, case-insensitive, coincidencia parcial
     Dim i As Long
     For i = 0 To UBound(arr)
         If InStr(1, UCase(arr(i)), UCase(sBuscar)) > 0 Then
@@ -273,17 +281,15 @@ Private Function BuscarColumnaEnArray(arr() As String, sBuscar As String) As Lon
     BuscarColumnaEnArray = -1
 End Function
 
+' 1-based, exacta primero luego parcial
 Private Function BuscarColumnaEnArrayBase1(arr() As String, sBuscar As String, nCols As Long) As Long
-    ' B�squeda 1-based, case-insensitive, coincidencia exacta primero, luego parcial
     Dim i As Long
-    ' Exacta
     For i = 1 To nCols
         If UCase(Trim(arr(i))) = UCase(Trim(sBuscar)) Then
             BuscarColumnaEnArrayBase1 = i
             Exit Function
         End If
     Next i
-    ' Parcial
     For i = 1 To nCols
         If InStr(1, UCase(arr(i)), UCase(sBuscar)) > 0 Then
             BuscarColumnaEnArrayBase1 = i
@@ -293,38 +299,39 @@ Private Function BuscarColumnaEnArrayBase1(arr() As String, sBuscar As String, n
     BuscarColumnaEnArrayBase1 = -1
 End Function
 
+' 1-based, elimina espacios antes de comparar (NIC CODE -> NICCODE)
+Private Function BuscarColumnaFlexible(arr() As String, sBuscar As String, nCols As Long) As Long
+    Dim i As Long
+    For i = 1 To nCols
+        If UCase(Replace(Trim(arr(i)), " ", "")) = UCase(sBuscar) Then
+            BuscarColumnaFlexible = i
+            Exit Function
+        End If
+    Next i
+    BuscarColumnaFlexible = -1
+End Function
+
 Private Sub BuscarFilasEsclavo(ws As Worksheet, ByRef iFilaCodigos As Long, ByRef iFilaLabels As Long)
-    ' Busca la fila que contiene c�digos tipo Axxx (patr�n: letra A + d�gitos)
-    ' y la fila adyacente con labels de texto
     iFilaCodigos = -1
     iFilaLabels = -1
-    Dim r As Long
     Dim nCols As Long
-    nCols = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
-    If nCols < 2 Then nCols = ws.UsedRange.Columns.Count
-
-    For r = 1 To 10  ' Buscar en las primeras 10 filas
-        Dim nMatchCodigos As Long
-        nMatchCodigos = 0
-        Dim c As Long
+    nCols = ws.UsedRange.Columns.Count
+    Dim r As Long, c As Long
+    For r = 1 To 10
+        Dim nMatch As Long
+        nMatch = 0
         For c = 1 To nCols
             Dim sVal As String
             sVal = Trim(CStr(ws.Cells(r, c).Value))
-            ' Patr�n: empieza por A seguido de d�gitos (A001, A002...)
             If Len(sVal) >= 2 Then
                 If UCase(Left(sVal, 1)) = "A" And IsNumeric(Mid(sVal, 2)) Then
-                    nMatchCodigos = nMatchCodigos + 1
+                    nMatch = nMatch + 1
                 End If
             End If
         Next c
-        If nMatchCodigos >= 3 Then  ' al menos 3 coincidencias para confirmar
+        If nMatch >= 3 Then
             iFilaCodigos = r
-            ' La fila de labels es la adyacente (anterior o posterior) con texto no num�rico
-            If r > 1 Then
-                iFilaLabels = r - 1
-            Else
-                iFilaLabels = r + 1
-            End If
+            If r > 1 Then iFilaLabels = r - 1 Else iFilaLabels = r + 1
             Exit For
         End If
     Next r
