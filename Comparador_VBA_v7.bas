@@ -59,8 +59,10 @@ Sub BorrarTodo()
 
     Dim wsMenu As Worksheet
     Set wsMenu = ThisWorkbook.Worksheets("MENU")
+    wsMenu.Unprotect Password:="ABP"
     wsMenu.Range("J1").Value = ""
     wsMenu.Range("J2").Value = ""
+    wsMenu.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
 
     Application.DisplayAlerts = False
     Dim iWs As Integer
@@ -153,9 +155,13 @@ Sub ImportarHoja(slot As Integer)
     wbThis.Worksheets(wbThis.Worksheets.Count).Name = nomHoja
 
     If slot = 1 Then
+        wsMenu.Unprotect Password:="ABP"
         wsMenu.Range("J1").Value = nomHoja
+        wsMenu.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
     Else
+        wsMenu.Unprotect Password:="ABP"
         wsMenu.Range("J2").Value = nomHoja
+        wsMenu.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
     End If
 
     wsMenu.Activate

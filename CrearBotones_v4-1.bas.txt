@@ -1,0 +1,139 @@
+Attribute VB_Name = "CrearBotones"
+Option Explicit
+
+' ============================================================
+'  CREAR BOTONES EN EL MENU  v4
+'  Unico cambio respecto a v3:
+'    - Los shapes se nombran Btn1, Btn2, Btn3, BtnBorrar
+'      para que la logica posicional los encuentre por nombre
+'  Todo lo demas identico a v3
+' ============================================================
+
+Sub CrearBotonesMenu()
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets("MENU")
+    ws.Unprotect Password:="ABP"
+
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+
+    Application.ScreenUpdating = False
+
+    Dim btnH  As Double: btnH  = 32
+    Dim btnW  As Double: btnW  = 150
+    Dim lblH  As Double: lblH  = 18
+    Dim sep   As Double: sep   = 16
+    Dim leftX As Double: leftX = 30
+    Dim topY  As Double: topY  = 30
+
+    Dim leftB1 As Double: leftB1 = leftX
+    Dim leftB2 As Double: leftB2 = leftX + btnW + sep
+    Dim leftB3 As Double: leftB3 = leftX + (btnW + sep) * 2
+
+    ' Labels
+    Dim l1 As Shape
+    Set l1 = ws.Shapes.AddTextbox(msoTextOrientationHorizontal, leftB1, topY, btnW, lblH)
+    With l1.TextFrame2
+        .TextRange.Text = "Paso 1  |  Bulk antiguo"
+        .TextRange.Font.Size = 10
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(90, 90, 90)
+    End With
+    l1.Fill.Visible = msoFalse
+    l1.Line.Visible = msoFalse
+
+    Dim l2 As Shape
+    Set l2 = ws.Shapes.AddTextbox(msoTextOrientationHorizontal, leftB2, topY, btnW, lblH)
+    With l2.TextFrame2
+        .TextRange.Text = "Paso 2  |  Bulk actual"
+        .TextRange.Font.Size = 10
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(90, 90, 90)
+    End With
+    l2.Fill.Visible = msoFalse
+    l2.Line.Visible = msoFalse
+
+    Dim l3 As Shape
+    Set l3 = ws.Shapes.AddTextbox(msoTextOrientationHorizontal, leftB3, topY, btnW, lblH)
+    With l3.TextFrame2
+        .TextRange.Text = "Paso 3  |  Comparar"
+        .TextRange.Font.Size = 10
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(90, 90, 90)
+    End With
+    l3.Fill.Visible = msoFalse
+    l3.Line.Visible = msoFalse
+
+    Dim btnTop As Double: btnTop = topY + lblH
+
+    ' Boton 1 - NOMBRADO Btn1
+    Dim b1 As Shape
+    Set b1 = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftB1, btnTop, btnW, btnH)
+    b1.Name = "Btn1"
+    With b1.TextFrame2
+        .TextRange.Text = "Importar fichero 1"
+        .TextRange.Font.Size = 9
+        .TextRange.Font.Bold = msoTrue
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .VerticalAnchor = msoAnchorMiddle
+    End With
+    With b1.Fill: .Solid: .ForeColor.RGB = RGB(52, 110, 160): End With
+    With b1.Line: .ForeColor.RGB = RGB(35, 80, 120): .Weight = 0.75: End With
+    b1.OnAction = "BotonImportar1"
+
+    ' Boton 2 - NOMBRADO Btn2
+    Dim b2 As Shape
+    Set b2 = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftB2, btnTop, btnW, btnH)
+    b2.Name = "Btn2"
+    With b2.TextFrame2
+        .TextRange.Text = "Importar fichero 2"
+        .TextRange.Font.Size = 9
+        .TextRange.Font.Bold = msoTrue
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .VerticalAnchor = msoAnchorMiddle
+    End With
+    With b2.Fill: .Solid: .ForeColor.RGB = RGB(52, 110, 160): End With
+    With b2.Line: .ForeColor.RGB = RGB(35, 80, 120): .Weight = 0.75: End With
+    b2.OnAction = "BotonImportar2"
+
+    ' Boton 3 - NOMBRADO Btn3 (Comparar, sin cambios)
+    Dim b3 As Shape
+    Set b3 = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftB3, btnTop, btnW, btnH)
+    b3.Name = "Btn3"
+    With b3.TextFrame2
+        .TextRange.Text = "Comparar"
+        .TextRange.Font.Size = 9
+        .TextRange.Font.Bold = msoTrue
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .VerticalAnchor = msoAnchorMiddle
+    End With
+    With b3.Fill: .Solid: .ForeColor.RGB = RGB(160, 60, 50): End With
+    With b3.Line: .ForeColor.RGB = RGB(120, 40, 35): .Weight = 0.75: End With
+    b3.OnAction = "CompararHojas"
+
+    ' Boton Borrar - NOMBRADO BtnBorrar
+    Dim anchoTotal As Double: anchoTotal = btnW * 3 + sep * 2
+    Dim topBorrar  As Double: topBorrar  = btnTop + btnH + 50
+    Dim b4 As Shape
+    Set b4 = ws.Shapes.AddShape(msoShapeRoundedRectangle, leftB1, topBorrar, anchoTotal, 24)
+    b4.Name = "BtnBorrar"
+    With b4.TextFrame2
+        .TextRange.Text = "Borrar todas las hojas menos MENU"
+        .TextRange.Font.Size = 8
+        .TextRange.Font.Fill.ForeColor.RGB = RGB(120, 120, 120)
+        .TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .VerticalAnchor = msoAnchorMiddle
+    End With
+    With b4.Fill: .Solid: .ForeColor.RGB = RGB(235, 235, 235): End With
+    With b4.Line: .ForeColor.RGB = RGB(180, 180, 180): .Weight = 0.75: End With
+    b4.OnAction = "BorrarTodo"
+
+    ws.Tab.Color = RGB(31, 78, 121)
+    Application.ScreenUpdating = True
+    ws.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+    MsgBox "Botones creados.", vbInformation, "Listo"
+
+End Sub

@@ -1,0 +1,20 @@
+' ============================================================
+'  CODIGO QUE VA EN EL MODULO "ThisWorkbook"
+'  En el editor VBA: doble clic en "ThisWorkbook" del arbol
+'  y pegar este codigo alli.
+' ============================================================
+
+Private Sub Workbook_Open()
+
+    ' Al abrir el libro, borrar ALEXANDRA si existe
+    ' para garantizar que siempre arranca en modo Proyecto B
+    Application.DisplayAlerts = False
+    On Error Resume Next
+    ThisWorkbook.Worksheets("ALEXANDRA").Delete
+    On Error GoTo 0
+    Application.DisplayAlerts = True
+
+    ' Activar MENU y actualizar botones a azul (modo clasico)
+    ThisWorkbook.Worksheets("MENU").Activate
+
+End Sub
