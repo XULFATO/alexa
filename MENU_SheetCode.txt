@@ -1,0 +1,79 @@
+' ============================================================
+'  CODIGO QUE VA EN EL MODULO DE LA HOJA "MENU"
+'  En el editor VBA: doble clic en la hoja MENU del arbol
+'  y pegar este codigo alli.
+'  Contrasena MENU: ABP
+' ============================================================
+
+Private Sub Worksheet_Activate()
+    ActualizarBotonesSegunAlexandra
+End Sub
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    ActualizarBotonesSegunAlexandra
+End Sub
+
+' ============================================================
+'  LOGICA CENTRAL: detecta ALEXANDRA y actualiza botones
+' ============================================================
+Private Sub ActualizarBotonesSegunAlexandra()
+
+    Dim ws As Worksheet
+    Set ws = Me  ' esta misma hoja MENU
+
+    ' Comprobar si existe pestana ALEXANDRA
+    Dim bAlexandra As Boolean
+    bAlexandra = False
+    Dim wsTemp As Worksheet
+    For Each wsTemp In ThisWorkbook.Worksheets
+        If UCase(Trim(wsTemp.Name)) = "ALEXANDRA" Then
+            bAlexandra = True
+            Exit For
+        End If
+    Next wsTemp
+
+    ' Buscar los botones
+    Dim btn1 As Shape, btn2 As Shape
+    On Error Resume Next
+    Set btn1 = ws.Shapes("Btn1")
+    Set btn2 = ws.Shapes("Btn2")
+    On Error GoTo 0
+    If btn1 Is Nothing Or btn2 Is Nothing Then Exit Sub
+
+    ' Desproteger MENU para modificar shapes
+    ws.Unprotect Password:="ABP"
+
+    If bAlexandra Then
+        ' Modo Proyecto A - naranja
+        With btn1
+            .TextFrame2.TextRange.Text = "Importar CSV"
+            .Fill.ForeColor.RGB = RGB(210, 100, 20)
+            .Line.ForeColor.RGB = RGB(160, 70, 10)
+            .OnAction = "BotonImportar1"
+        End With
+        With btn2
+            .TextFrame2.TextRange.Text = "Importar Excel"
+            .Fill.ForeColor.RGB = RGB(210, 100, 20)
+            .Line.ForeColor.RGB = RGB(160, 70, 10)
+            .OnAction = "BotonImportar2"
+        End With
+    Else
+        ' Modo Proyecto B - azul
+        With btn1
+            .TextFrame2.TextRange.Text = "Importar fichero 1"
+            .Fill.ForeColor.RGB = RGB(52, 110, 160)
+            .Line.ForeColor.RGB = RGB(35, 80, 120)
+            .OnAction = "BotonImportar1"
+        End With
+        With btn2
+            .TextFrame2.TextRange.Text = "Importar fichero 2"
+            .Fill.ForeColor.RGB = RGB(52, 110, 160)
+            .Line.ForeColor.RGB = RGB(35, 80, 120)
+            .OnAction = "BotonImportar2"
+        End With
+    End If
+
+    ' Volver a proteger
+    ws.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+
+End Sub
