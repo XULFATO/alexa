@@ -21,48 +21,8 @@ Option Explicit
 '    NISS maestro -> NIC Code esclavo (col B)
 '    CAxxxx       -> quitar C -> Axxxx -> buscar fila 3
 '    Col 1 salida -> siempre "EMPLOYEE ID"
-'    D376 / B001  -> numerico 2 decimales
+'    B357 / B001  -> numerico 2 decimales
 ' ============================================================
-
-' ============================================================
-'  ACTUALIZAR TEXTO Y COLOR DE BOTONES SEGUN POSICION
-'  Llamado desde evento SelectionChange de hoja MENU
-' ============================================================
-
-Public Sub ActualizarBotones()
-    Dim ws As Worksheet
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets("MENU")
-    On Error GoTo 0
-    If ws Is Nothing Then Exit Sub
-
-    Dim btn1 As Shape, btn2 As Shape
-    On Error Resume Next
-    Set btn1 = ws.Shapes("Btn1")
-    Set btn2 = ws.Shapes("Btn2")
-    On Error GoTo 0
-    If btn1 Is Nothing Or btn2 Is Nothing Then Exit Sub
-
-    If btn1.Top <= UMBRAL_TOPE Then
-        btn1.TextFrame2.TextRange.Text = "Importar CSV"
-        btn1.Fill.ForeColor.RGB = RGB(210, 100, 20)
-        btn1.Line.ForeColor.RGB = RGB(160, 70, 10)
-    Else
-        btn1.TextFrame2.TextRange.Text = "Importar bulk antiguo"
-        btn1.Fill.ForeColor.RGB = RGB(52, 110, 160)
-        btn1.Line.ForeColor.RGB = RGB(35, 80, 120)
-    End If
-
-    If btn2.Top <= UMBRAL_TOPE Then
-        btn2.TextFrame2.TextRange.Text = "Importar Excel"
-        btn2.Fill.ForeColor.RGB = RGB(210, 100, 20)
-        btn2.Line.ForeColor.RGB = RGB(160, 70, 10)
-    Else
-        btn2.TextFrame2.TextRange.Text = "Importar bulk reciente"
-        btn2.Fill.ForeColor.RGB = RGB(52, 110, 160)
-        btn2.Line.ForeColor.RGB = RGB(35, 80, 120)
-    End If
-End Sub
 
 ' ============================================================
 '  IMPORTAR CSV MAESTRO -> Page 1 v1
@@ -131,6 +91,8 @@ Public Sub ImportarCSV()
                 Dim sCodD As String
                 sCodD = arrHdr(j)
                 If UCase(Left(sCodD, 1)) = "C" Then sCodD = Mid(sCodD, 2)
+                ' DEBUG: descomentar para ver que codigo llega
+                ' MsgBox "Col " & j & " codigo=[" & sCodD & "] decimal=" & EsColumnaDecimal(sCodD)
                 If EsColumnaDecimal(sCodD) Then
                     Dim sNum As String
                     sNum = Replace(arrFila(j), ",", ".")
@@ -140,6 +102,8 @@ Public Sub ImportarCSV()
                         ws.Cells(iSalida, j + 1).Value = arrFila(j)
                     End If
                 Else
+                    ' Forzar texto para preservar ceros iniciales
+                    ws.Cells(iSalida, j + 1).NumberFormat = "@"
                     ws.Cells(iSalida, j + 1).Value = arrFila(j)
                 End If
             End If
@@ -301,6 +265,8 @@ Public Sub ImportarExcel()
                         wsE.Cells(iSal, j + 1).Value = Trim(CStr(wsD.Cells(rE, iCE).Value))
                     End If
                 Else
+                    ' Forzar texto para preservar ceros iniciales
+                    wsE.Cells(iSal, j + 1).NumberFormat = "@"
                     wsE.Cells(iSal, j + 1).Value = Trim(CStr(wsD.Cells(rE, iCE).Value))
                 End If
             End If
@@ -336,7 +302,7 @@ End Sub
 
 Private Function EsColumnaDecimal(sCodigo As String) As Boolean
     Select Case UCase(Trim(sCodigo))
-        Case "D376", "B001"
+        Case "B357", "B001"
             EsColumnaDecimal = True
         Case Else
             EsColumnaDecimal = False
