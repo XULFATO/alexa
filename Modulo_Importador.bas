@@ -2,25 +2,22 @@ Attribute VB_Name = "Modulo_Importador"
 Option Explicit
 
 ' ============================================================
-'  IMPORTADOR MAESTRO / ESCLAVO  v4
+'  IMPORTADOR MAESTRO / ESCLAVO  v5
 '
-'  ESTRUCTURA ESCLAVO (confirmada por imagen):
-'    Fila 1 : labels idioma local  (NIC Code, Nome, Apelido...)
-'    Fila 2 : labels ingles        (Employee ID, Name, Family Name...)
-'    Fila 3 : codigos campo        (A002, A001, AL11, A013...)  <- iFilaCodigos
-'    Fila 4 : tipos de dato        (9(7), X(30)...)
+'  ESTRUCTURA ESCLAVO (confirmada por fotos):
+'    Fila 1 : labels PT   (Numero empregado interno, NIC Code, Nome, Apelido...)
+'    Fila 2 : labels EN   (Employee ID, NIC Code (Client...), Name, Family Name...)
+'    Fila 3 : codigos     (vacia en A/B, A002, A001, AL11, A013...)
+'    Fila 4 : tipos dato  (9(7), 9(12), X(30)...)
 '    Fila 5 : descripciones largas
 '    Fila 6+: DATOS
 '
-'  ESTRUCTURA MAESTRO (CSV):
-'    Fila 1 : headers              (NISS, CA002, CA001, CAL11, CA013...)
-'             OJO: puede tener BOM UTF-8 al inicio -> se limpia
-'    Fila 2+: DATOS
+'  MAPEO de columnas:
+'    Header maestro NISS    -> columna del esclavo que tenga "NIC Code" en fila 1 (col B)
+'    Header maestro CA001   -> quitar C -> A001 -> buscar en fila 3 del esclavo
 '
-'  MAPEO: CA001 -> quitar C -> A001 -> buscar en fila 3 del esclavo
-'  NISS del maestro = columna A del esclavo (Employee ID / Numero empregado interno)
-'    -> la columna A del esclavo no tiene codigo Axxx, se detecta por ser col. 1
-'       o por buscar "NISS" / "Employee ID" en fila 2
+'  HEADERS del resultado:
+'    Ambas hojas usan los labels de la FILA 1 del esclavo (reordenados segun maestro)
 ' ============================================================
 
 Public Sub ImportarMaestroEsclavo()
@@ -39,39 +36,28 @@ Public Sub ImportarMaestroEsclavo()
     On Error GoTo ErrHandler
 
     ' ================================================================
-    ' PASO 1: Leer CSV Maestro, limpiar BOM UTF-8
+    ' PASO 1: Leer CSV Maestro
     ' ================================================================
     Dim arrMaestro() As String
     Dim nFilasMaestro As Long
     arrMaestro = LeerCSV(sRutaMaestro, nFilasMaestro)
 
-    ' Limpiar BOM UTF-8 (EF BB BF leido como ï»¿) de la primera linea no vacia
     Dim iHeaderMaestro As Long
     iHeaderMaestro = BuscarFilaHeader(arrMaestro, nFilasMaestro)
     If iHeaderMaestro < 0 Then
         MsgBox "No se encontro fila de headers en el Maestro.", vbCritical: GoTo Salir
     End If
-    arrMaestro(iHeaderMaestro) = LimpiarBOM(arrMaestro(iHeaderMaestro))
 
+    ' Limpiar BOM y parsear headers
+    arrMaestro(iHeaderMaestro) = LimpiarBOM(arrMaestro(iHeaderMaestro))
     Dim arrHeaderMaestro() As String
     arrHeaderMaestro = SplitCSVLine(arrMaestro(iHeaderMaestro))
     Dim nColsMaestro As Long
     nColsMaestro = UBound(arrHeaderMaestro) + 1
-
-    ' Limpiar BOM tambien en cada celda del header por si acaso
     Dim hh As Long
     For hh = 0 To nColsMaestro - 1
         arrHeaderMaestro(hh) = LimpiarBOM(Trim(arrHeaderMaestro(hh)))
     Next hh
-
-    ' Buscar columna NISS en maestro (0-based)
-    Dim iNissMaestro As Long
-    iNissMaestro = BuscarColumnaEnArray(arrHeaderMaestro, "NISS")
-    If iNissMaestro < 0 Then
-        MsgBox "No se encontro columna 'NISS' en el Maestro." & vbCrLf & _
-               "Primer header leido: [" & arrHeaderMaestro(0) & "]", vbCritical
-        GoTo Salir
-    End If
 
     ' ================================================================
     ' PASO 2: Abrir Excel Esclavo
@@ -81,73 +67,77 @@ Public Sub ImportarMaestroEsclavo()
     Dim wsEsclavo As Worksheet
     Set wsEsclavo = wbEsclavo.Sheets(1)  ' hoja "Data"
 
-    ' Buscar fila de codigos (A001, A002...) entre filas 1-10
-    ' y fila de labels (la anterior)
-    Dim iFilaCodigos As Long, iFilaLabels As Long
-    BuscarFilasEsclavo wsEsclavo, iFilaCodigos, iFilaLabels
-
+    ' Buscar fila de codigos Axxx (normalmente fila 3)
+    Dim iFilaCodigos As Long
+    iFilaCodigos = BuscarFilaCodigos(wsEsclavo)
     If iFilaCodigos < 0 Then
         wbEsclavo.Close False
         MsgBox "No se encontro fila de codigos (Axxx) en el Esclavo.", vbCritical: GoTo Salir
     End If
 
-    ' Numero de columnas del esclavo
+    ' Fila 1 = labels PT (cabeceras del resultado)
+    ' Fila de datos = fija en 6 (confirmado por imagen)
+    Dim iFilaLabelsPT As Long
+    iFilaLabelsPT = 1
+    Dim iInicioData As Long
+    iInicioData = 6
+
     Dim nColsEsclavo As Long
     nColsEsclavo = wsEsclavo.UsedRange.Columns.Count
 
-    ' Leer arrays de codigos y labels del esclavo
-    Dim arrCodEsclavo() As String
-    Dim arrLblEsclavo() As String
+    ' Leer arrays: codigos (fila 3), labels PT (fila 1)
+    Dim arrCodEsclavo() As String    ' A002, A001, AL11... (vacio en col A y B)
+    Dim arrLblPT() As String         ' Numero empregado interno, NIC Code, Nome...
     ReDim arrCodEsclavo(1 To nColsEsclavo)
-    ReDim arrLblEsclavo(1 To nColsEsclavo)
+    ReDim arrLblPT(1 To nColsEsclavo)
     Dim c As Long
     For c = 1 To nColsEsclavo
         arrCodEsclavo(c) = Trim(CStr(wsEsclavo.Cells(iFilaCodigos, c).Value))
-        If iFilaLabels > 0 Then
-            ' Usar fila 2 (ingles) como labels: Employee ID, Name, Family Name...
-            arrLblEsclavo(c) = Trim(CStr(wsEsclavo.Cells(iFilaLabels, c).Value))
-        End If
+        arrLblPT(c) = Trim(CStr(wsEsclavo.Cells(iFilaLabelsPT, c).Value))
     Next c
 
-    ' Buscar columna NIC CODE en labels (fila 2 del esclavo)
-    Dim iNikkodeEsclavo As Long
-    iNikkodeEsclavo = BuscarColumnaFlexible(arrLblEsclavo, "NICCODE", nColsEsclavo)
-    If iNikkodeEsclavo < 0 Then iNikkodeEsclavo = BuscarColumnaFlexible(arrCodEsclavo, "NICCODE", nColsEsclavo)
-    If iNikkodeEsclavo < 0 Then iNikkodeEsclavo = BuscarColumnaEnArrayBase1(arrLblEsclavo, "NIC", nColsEsclavo)
-    If iNikkodeEsclavo < 0 Then iNikkodeEsclavo = BuscarColumnaEnArrayBase1(arrCodEsclavo, "NIC", nColsEsclavo)
-    ' Fallback: columna B (segun imagen NIC Code esta en B)
-    If iNikkodeEsclavo < 0 Then iNikkodeEsclavo = 2
-
-    ' Buscar columna Employee ID en esclavo (col A segun imagen, campo clave = NISS maestro)
-    ' En fila 3 la col A esta vacia, se busca por label "Employee ID" o se asume col 1
-    Dim iEmployeeIdEsclavo As Long
-    iEmployeeIdEsclavo = BuscarColumnaFlexible(arrLblEsclavo, "EMPLOYEEID", nColsEsclavo)
-    If iEmployeeIdEsclavo < 0 Then iEmployeeIdEsclavo = BuscarColumnaEnArrayBase1(arrLblEsclavo, "Employee", nColsEsclavo)
-    If iEmployeeIdEsclavo < 0 Then iEmployeeIdEsclavo = 1  ' fallback: columna A
+    ' Buscar columna NIC Code en fila 1 PT (col B segun imagen)
+    Dim iNicCodeEsclavo As Long
+    iNicCodeEsclavo = BuscarColumnaFlexible(arrLblPT, "NICCODE", nColsEsclavo)
+    If iNicCodeEsclavo < 0 Then iNicCodeEsclavo = BuscarColumnaEnArrayBase1(arrLblPT, "NIC", nColsEsclavo)
+    If iNicCodeEsclavo < 0 Then iNicCodeEsclavo = 2  ' fallback col B
 
     ' ================================================================
     ' PASO 3: Construir mapa de reordenacion
-    '   maestro col i (CA001) -> quitar C -> A001 -> buscar en arrCodEsclavo
-    '   caso especial: si el header maestro es "NISS" -> mapea a iEmployeeIdEsclavo
+    '   NISS del maestro  -> columna NIC Code del esclavo (col B)
+    '   CA001 del maestro -> A001 -> buscar en arrCodEsclavo (fila 3)
     ' ================================================================
-    Dim arrMapEsclavo() As Long
+    Dim arrMapEsclavo() As Long   ' columna en esclavo para cada col del maestro (-1 = no hay)
+    Dim arrHeaderSalida() As String  ' label PT correspondiente a cada col del maestro
     ReDim arrMapEsclavo(0 To nColsMaestro - 1)
+    ReDim arrHeaderSalida(0 To nColsMaestro - 1)
+
     Dim i As Long
     For i = 0 To nColsMaestro - 1
         Dim sCodMaestro As String
         sCodMaestro = Trim(arrHeaderMaestro(i))
 
-        ' Caso especial: NISS del maestro = Employee ID del esclavo (col A)
+        Dim iColE As Long
         If UCase(sCodMaestro) = "NISS" Then
-            arrMapEsclavo(i) = iEmployeeIdEsclavo
+            ' NISS maestro -> NIC Code esclavo (col B)
+            iColE = iNicCodeEsclavo
         Else
+            ' CA001 -> A001 -> buscar en fila codigos
             Dim sBuscado As String
             If UCase(Left(sCodMaestro, 1)) = "C" Then
-                sBuscado = Mid(sCodMaestro, 2)   ' CA001 -> A001
+                sBuscado = Mid(sCodMaestro, 2)
             Else
                 sBuscado = sCodMaestro
             End If
-            arrMapEsclavo(i) = BuscarColumnaEnArrayBase1(arrCodEsclavo, sBuscado, nColsEsclavo)
+            iColE = BuscarColumnaEnArrayBase1(arrCodEsclavo, sBuscado, nColsEsclavo)
+        End If
+
+        arrMapEsclavo(i) = iColE
+        ' Header de salida = label PT de esa columna del esclavo
+        If iColE > 0 Then
+            arrHeaderSalida(i) = arrLblPT(iColE)
+        Else
+            arrHeaderSalida(i) = sCodMaestro & " [N/D]"
         End If
     Next i
 
@@ -159,23 +149,23 @@ Public Sub ImportarMaestroEsclavo()
     Set wsE = ObtenerOCrearHoja(ThisWorkbook, "ESCLAVO")
     wsM.Cells.ClearContents
     wsE.Cells.ClearContents
-    ' Formato texto para preservar ceros iniciales
     wsM.Cells.NumberFormat = "@"
     wsE.Cells.NumberFormat = "@"
 
-    ' Headers identicos en ambas hojas (= headers del MAESTRO)
+    ' Headers = labels PT del esclavo (reordenados segun maestro)
     Dim j As Long
     For j = 0 To nColsMaestro - 1
         wsM.Cells(1, j + 1).NumberFormat = "General"
-        wsM.Cells(1, j + 1).Value = arrHeaderMaestro(j)
+        wsM.Cells(1, j + 1).Value = arrHeaderSalida(j)
         wsE.Cells(1, j + 1).NumberFormat = "General"
-        wsE.Cells(1, j + 1).Value = arrHeaderMaestro(j)
+        wsE.Cells(1, j + 1).Value = arrHeaderSalida(j)
     Next j
     wsM.Rows(1).Font.Bold = True
     wsE.Rows(1).Font.Bold = True
 
     ' ================================================================
-    ' PASO 5: Volcar datos Maestro (texto, ceros preservados)
+    ' PASO 5: Datos Maestro
+    '   La columna NISS del maestro se vuelca tal cual (es el NIC Code equivalente)
     ' ================================================================
     Dim iFilaSalidaM As Long
     iFilaSalidaM = 2
@@ -194,37 +184,16 @@ SiguienteFilaMaestro:
     Next r
 
     ' ================================================================
-    ' PASO 6: Volcar datos Esclavo reordenado
+    ' PASO 6: Datos Esclavo reordenado (desde fila 6)
     ' ================================================================
-    ' Primera fila de datos = fila siguiente a la ultima fila de headers
-    Dim iInicioData As Long
-    iInicioData = iFilaCodigos
-    If iFilaLabels > iInicioData Then iInicioData = iFilaLabels
-    iInicioData = iInicioData + 1
-    ' Saltar filas de tipo/descripcion hasta encontrar datos numericos en col A o B
-    ' (en la imagen hay filas 4 y 5 con tipos/descripciones antes de los datos en fila 6)
-    ' Avanzar mientras la celda de Employee ID este vacia o contenga no-numero
-    Dim iColRef As Long
-    iColRef = iEmployeeIdEsclavo
-    Do While iInicioData <= 20
-        Dim sTest As String
-        sTest = Trim(CStr(wsEsclavo.Cells(iInicioData, iColRef).Value))
-        If Len(sTest) > 0 And IsNumeric(sTest) Then Exit Do
-        ' Tambien aceptar si tiene contenido alfanumerico que parezca un ID (>= 4 chars)
-        If Len(sTest) >= 4 Then Exit Do
-        iInicioData = iInicioData + 1
-    Loop
-
     Dim iUltimaFilaE As Long
-    iUltimaFilaE = wsEsclavo.Cells(wsEsclavo.Rows.Count, iColRef).End(xlUp).Row
+    iUltimaFilaE = wsEsclavo.Cells(wsEsclavo.Rows.Count, iNicCodeEsclavo).End(xlUp).Row
 
     Dim iFilaSalidaE As Long
     iFilaSalidaE = 2
     Dim rE As Long
-    Dim iColE As Long
     For rE = iInicioData To iUltimaFilaE
-        ' Saltar filas vacias
-        If Len(Trim(CStr(wsEsclavo.Cells(rE, iColRef).Value))) = 0 Then GoTo SiguienteFilaEsclavo
+        If Len(Trim(CStr(wsEsclavo.Cells(rE, iNicCodeEsclavo).Value))) = 0 Then GoTo SiguienteFilaEsclavo
         For j = 0 To nColsMaestro - 1
             iColE = arrMapEsclavo(j)
             If iColE > 0 Then
@@ -244,11 +213,9 @@ SiguienteFilaEsclavo:
     MsgBox "Importacion completada." & vbCrLf & _
            "  Maestro : " & iFilaSalidaM - 2 & " filas  ->  hoja MAESTRO" & vbCrLf & _
            "  Esclavo : " & iFilaSalidaE - 2 & " filas  ->  hoja ESCLAVO" & vbCrLf & vbCrLf & _
-           "  Col. NISS       (Maestro) : col. " & iNissMaestro + 1 & vbCrLf & _
-           "  Col. Employee ID (Esclavo): col. " & iEmployeeIdEsclavo & vbCrLf & _
-           "  Col. NIC CODE   (Esclavo) : col. " & iNikkodeEsclavo & vbCrLf & _
-           "  Fila codigos    (Esclavo) : fila " & iFilaCodigos & vbCrLf & _
-           "  Inicio datos    (Esclavo) : fila " & iInicioData, vbInformation
+           "  Col. NIC Code  (Esclavo) : col. " & iNicCodeEsclavo & vbCrLf & _
+           "  Fila codigos   (Esclavo) : fila " & iFilaCodigos & vbCrLf & _
+           "  Inicio datos   (Esclavo) : fila " & iInicioData, vbInformation
     Exit Sub
 
 ErrHandler:
@@ -263,13 +230,9 @@ End Sub
 ' ============================================================
 
 Private Function LimpiarBOM(s As String) As String
-    ' Elimina BOM UTF-8 leido como ï»¿ o como caracter Chr(239)+Chr(187)+Chr(191)
-    Dim sBOM1 As String, sBOM2 As String
-    sBOM1 = Chr(239) & Chr(187) & Chr(191)   ' BOM bytes crudos
-    sBOM2 = Chr(239) & Chr(172) & Chr(191)   ' variante
-    If Left(s, 3) = sBOM1 Then s = Mid(s, 4)
-    If Left(s, 3) = sBOM2 Then s = Mid(s, 4)
-    ' Tambien limpiar la version visible como texto
+    Dim sBOM As String
+    sBOM = Chr(239) & Chr(187) & Chr(191)
+    If Left(s, 3) = sBOM Then s = Mid(s, 4)
     Do While Left(s, 1) = Chr(255) Or Left(s, 1) = Chr(254) Or _
              Left(s, 1) = Chr(239) Or Left(s, 1) = Chr(187) Or Left(s, 1) = Chr(191)
         s = Mid(s, 2)
@@ -349,6 +312,31 @@ Private Function BuscarFilaHeader(arr() As String, nFilas As Long) As Long
     BuscarFilaHeader = -1
 End Function
 
+Private Function BuscarFilaCodigos(ws As Worksheet) As Long
+    ' Devuelve la fila que tiene >= 3 celdas con patron A+digitos
+    Dim nCols As Long
+    nCols = ws.UsedRange.Columns.Count
+    Dim r As Long, c As Long
+    For r = 1 To 10
+        Dim nMatch As Long
+        nMatch = 0
+        For c = 1 To nCols
+            Dim sVal As String
+            sVal = Trim(CStr(ws.Cells(r, c).Value))
+            If Len(sVal) >= 2 Then
+                If UCase(Left(sVal, 1)) = "A" And IsNumeric(Mid(sVal, 2)) Then
+                    nMatch = nMatch + 1
+                End If
+            End If
+        Next c
+        If nMatch >= 3 Then
+            BuscarFilaCodigos = r
+            Exit Function
+        End If
+    Next r
+    BuscarFilaCodigos = -1
+End Function
+
 Private Function BuscarColumnaEnArray(arr() As String, sBuscar As String) As Long
     Dim i As Long
     For i = 0 To UBound(arr)
@@ -387,35 +375,6 @@ Private Function BuscarColumnaFlexible(arr() As String, sBuscar As String, nCols
     Next i
     BuscarColumnaFlexible = -1
 End Function
-
-Private Sub BuscarFilasEsclavo(ws As Worksheet, ByRef iFilaCodigos As Long, ByRef iFilaLabels As Long)
-    ' Busca la fila con patron A+digitos (A001, A002...) entre filas 1-10
-    ' iFilaLabels = fila 2 anterior (labels en ingles segun estructura conocida)
-    iFilaCodigos = -1
-    iFilaLabels = -1
-    Dim nCols As Long
-    nCols = ws.UsedRange.Columns.Count
-    Dim r As Long, c As Long
-    For r = 1 To 10
-        Dim nMatch As Long
-        nMatch = 0
-        For c = 1 To nCols
-            Dim sVal As String
-            sVal = Trim(CStr(ws.Cells(r, c).Value))
-            If Len(sVal) >= 2 Then
-                If UCase(Left(sVal, 1)) = "A" And IsNumeric(Mid(sVal, 2)) Then
-                    nMatch = nMatch + 1
-                End If
-            End If
-        Next c
-        If nMatch >= 3 Then
-            iFilaCodigos = r
-            ' Labels en ingles = fila anterior (fila 2 si codigos en fila 3)
-            If r > 1 Then iFilaLabels = r - 1 Else iFilaLabels = -1
-            Exit For
-        End If
-    Next r
-End Sub
 
 Private Function ObtenerOCrearHoja(wb As Workbook, sNombre As String) As Worksheet
     Dim ws As Worksheet
