@@ -333,8 +333,8 @@ Sub CompararHojas()
         End If
         wsC.Range(wsC.Cells(1, colC), wsC.Cells(1, colC + 1)).Merge
         wsC.Cells(1, colC).Value = cabecera
-        wsC.Cells(2, colC).Value = "BULK ANTERIOR"
-        wsC.Cells(2, colC + 1).Value = "BULK ACTUAL"
+        wsC.Cells(2, colC).Value = "v1"
+        wsC.Cells(2, colC + 1).Value = "v2"
     Next col
 
     With wsC.Rows(1)
@@ -407,9 +407,61 @@ Sub CompararHojas()
             v2 = ""
             If r1 > 0 And col <= lastCol1 Then v1 = ws1.Cells(r1, col).Text
             If r2 > 0 And col <= lastCol2 Then v2 = ws2.Cells(r2, col).Text
-            wsC.Cells(filaC, colC).Value = v1
-            wsC.Cells(filaC, colC + 1).Value = v2
-            If estado = "NO" And v1 <> v2 Then
+
+            ' Detectar si la columna es numerica o texto
+            ' y normalizar formato para comparacion correcta
+            Dim bEs1Num As Boolean, bEs2Num As Boolean
+            Dim d1 As Double, d2 As Double
+            Dim sV1Norm As String, sV2Norm As String
+            bEs1Num = IsNumeric(Replace(v1, ",", ".")) And Len(Trim(v1)) > 0
+            bEs2Num = IsNumeric(Replace(v2, ",", ".")) And Len(Trim(v2)) > 0
+
+            ' Cabecera de la columna (para detectar EMPLOYEE ID)
+            Dim sCabCol As String
+            If col <= lastCol1 Then
+                sCabCol = LCase(Trim(CStr(ws1.Cells(1, col).Value)))
+            ElseIf col <= lastCol2 Then
+                sCabCol = LCase(Trim(CStr(ws2.Cells(1, col).Value)))
+            End If
+            Dim bEsID As Boolean
+            bEsID = InStr(sCabCol, "employee") > 0
+
+            If bEsID Then
+                ' EMPLOYEE ID: siempre texto, rellenar con ceros hasta 8 digitos
+                Dim sID1 As String, sID2 As String
+                sID1 = Trim(v1)
+                sID2 = Trim(v2)
+                If IsNumeric(sID1) Then sID1 = Right("00000000" & CStr(CLng(CDbl(sID1))), 8)
+                If IsNumeric(sID2) Then sID2 = Right("00000000" & CStr(CLng(CDbl(sID2))), 8)
+                wsC.Cells(filaC, colC).NumberFormat = "@"
+                wsC.Cells(filaC, colC).Value = sID1
+                wsC.Cells(filaC, colC + 1).NumberFormat = "@"
+                wsC.Cells(filaC, colC + 1).Value = sID2
+                sV1Norm = sID1
+                sV2Norm = sID2
+            ElseIf bEs1Num Or bEs2Num Then
+                ' Columna numerica: convertir ambos a Double para comparar
+                d1 = 0: d2 = 0
+                If bEs1Num Then d1 = CDbl(Replace(v1, ",", "."))
+                If bEs2Num Then d2 = CDbl(Replace(v2, ",", "."))
+                wsC.Cells(filaC, colC).NumberFormat = "0.00"
+                wsC.Cells(filaC, colC).Value = d1
+                wsC.Cells(filaC, colC + 1).NumberFormat = "0.00"
+                wsC.Cells(filaC, colC + 1).Value = d2
+                ' Normalizar para comparacion: redondear a 10 decimales
+                sV1Norm = CStr(Round(d1, 10))
+                sV2Norm = CStr(Round(d2, 10))
+            Else
+                ' Columna texto: escribir tal cual
+                wsC.Cells(filaC, colC).NumberFormat = "@"
+                wsC.Cells(filaC, colC).Value = v1
+                wsC.Cells(filaC, colC + 1).NumberFormat = "@"
+                wsC.Cells(filaC, colC + 1).Value = v2
+                sV1Norm = v1
+                sV2Norm = v2
+            End If
+
+            If estado = "NO" And sV1Norm <> sV2Norm Then
                 estado = "SI": difFila = True
             End If
         Next col
@@ -423,7 +475,7 @@ Sub CompararHojas()
             End With
             For col = 1 To maxCol
                 colC = (col - 1) * 2 + 2
-                If CStr(wsC.Cells(filaC, colC).Value) <> CStr(wsC.Cells(filaC, colC + 1).Value) Then
+                If wsC.Cells(filaC, colC).Value <> wsC.Cells(filaC, colC + 1).Value Then
                     With wsC.Cells(filaC, colC + 1)
                         .Interior.Color = RGB(139, 0, 0)
                         .Font.Color = RGB(255, 255, 255)

@@ -97,8 +97,10 @@ Public Sub ImportarCSV()
                     Dim sNum As String
                     sNum = Replace(arrFila(j), ",", ".")
                     If IsNumeric(sNum) Then
+                        ws.Cells(iSalida, j + 1).NumberFormat = "0.00"
                         ws.Cells(iSalida, j + 1).Value = CDbl(sNum)
                     Else
+                        ws.Cells(iSalida, j + 1).NumberFormat = "@"
                         ws.Cells(iSalida, j + 1).Value = arrFila(j)
                     End If
                 Else
@@ -260,8 +262,10 @@ Public Sub ImportarExcel()
                     Dim sNumE As String
                     sNumE = Replace(Trim(CStr(wsD.Cells(rE, iCE).Value)), ",", ".")
                     If IsNumeric(sNumE) Then
+                        wsE.Cells(iSal, j + 1).NumberFormat = "0.00"
                         wsE.Cells(iSal, j + 1).Value = CDbl(sNumE)
                     Else
+                        wsE.Cells(iSal, j + 1).NumberFormat = "@"
                         wsE.Cells(iSal, j + 1).Value = Trim(CStr(wsD.Cells(rE, iCE).Value))
                     End If
                 Else
