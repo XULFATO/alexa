@@ -7,14 +7,16 @@
 Private Sub Workbook_Open()
 
     ' Al abrir el libro, borrar ALEXANDRA si existe
-    ' para garantizar que siempre arranca en modo Proyecto B
     Application.DisplayAlerts = False
     On Error Resume Next
     ThisWorkbook.Worksheets("ALEXANDRA").Delete
     On Error GoTo 0
     Application.DisplayAlerts = True
 
-    ' Activar MENU y actualizar botones a azul (modo clasico)
+    ' Proteger estructura del libro: impide borrar/mover/renombrar hojas
+
+    ' Activar MENU
     ThisWorkbook.Worksheets("MENU").Activate
 
 End Sub
+

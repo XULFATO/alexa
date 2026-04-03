@@ -9,18 +9,25 @@ Option Explicit
 '  TODO LO DEMAS IDENTICO A v6
 ' ============================================================
 
-Public Const UMBRAL_TOPE As Double = 15
+' ============================================================
+'  BOTONES CON LOGICA ALEXANDRA
+'  Si existe pestana ALEXANDRA -> Proyecto A (Importador_PageV)
+'  Si no existe                -> Proyecto B (clasico)
+' ============================================================
 
-' ============================================================
-'  BOTONES CON LOGICA POSICIONAL
-'  Si el boton esta subido al tope -> Proyecto A (Importador_PageV)
-'  Si el boton esta en posicion normal -> Proyecto B (clasico)
-' ============================================================
+Private Function ExisteAlexandra() As Boolean
+    Dim ws As Worksheet
+    For Each ws In ThisWorkbook.Worksheets
+        If UCase(Trim(ws.Name)) = "ALEXANDRA" Then
+            ExisteAlexandra = True
+            Exit Function
+        End If
+    Next ws
+    ExisteAlexandra = False
+End Function
 
 Sub BotonImportar1()
-    Dim btn As Shape
-    Set btn = ThisWorkbook.Worksheets("MENU").Shapes("Btn1")
-    If btn.Top <= UMBRAL_TOPE Then
+    If ExisteAlexandra() Then
         ImportarCSV      ' modulo Importador_PageV
     Else
         ImportarHoy1     ' proyecto B
@@ -28,9 +35,7 @@ Sub BotonImportar1()
 End Sub
 
 Sub BotonImportar2()
-    Dim btn As Shape
-    Set btn = ThisWorkbook.Worksheets("MENU").Shapes("Btn2")
-    If btn.Top <= UMBRAL_TOPE Then
+    If ExisteAlexandra() Then
         ImportarExcel    ' modulo Importador_PageV
     Else
         ImportarHoy2     ' proyecto B
@@ -59,11 +64,12 @@ Sub BorrarTodo()
 
     Dim wsMenu As Worksheet
     Set wsMenu = ThisWorkbook.Worksheets("MENU")
-    wsMenu.Unprotect Password:="ABP"
+    wsMenu.Unprotect Password:="ADP"
     wsMenu.Range("J1").Value = ""
     wsMenu.Range("J2").Value = ""
-    wsMenu.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+    wsMenu.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
 
+    ' Desproteger estructura del libro para poder borrar hojas
     Application.DisplayAlerts = False
     Dim iWs As Integer
     For iWs = ThisWorkbook.Worksheets.Count To 1 Step -1
@@ -72,6 +78,7 @@ Sub BorrarTodo()
         End If
     Next iWs
     Application.DisplayAlerts = True
+    ' Volver a proteger estructura
 
     wsMenu.Activate
     MsgBox "Listo. Solo queda la hoja MENU.", vbInformation, "Borrado completado"
@@ -155,13 +162,13 @@ Sub ImportarHoja(slot As Integer)
     wbThis.Worksheets(wbThis.Worksheets.Count).Name = nomHoja
 
     If slot = 1 Then
-        wsMenu.Unprotect Password:="ABP"
+        wsMenu.Unprotect Password:="ADP"
         wsMenu.Range("J1").Value = nomHoja
-        wsMenu.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+        wsMenu.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
     Else
-        wsMenu.Unprotect Password:="ABP"
+        wsMenu.Unprotect Password:="ADP"
         wsMenu.Range("J2").Value = nomHoja
-        wsMenu.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+        wsMenu.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
     End If
 
     wsMenu.Activate
@@ -244,7 +251,7 @@ Sub CompararHojas()
     ReDim idx2Rows(1 To nIdx2)
     Dim e As Long
     For e = 1 To nIdx2
-        idx2Keys(e) = CStr(ws2.Cells(e + 1, colEmp2).Value)
+        idx2Keys(e) = ws2.Cells(e + 1, colEmp2).Text
         idx2Rows(e) = e + 1
     Next e
 
@@ -257,7 +264,7 @@ Sub CompararHojas()
 
     Dim id1 As String
     For fila = 2 To lastRow1
-        id1 = CStr(ws1.Cells(fila, colEmp1).Value)
+        id1 = ws1.Cells(fila, colEmp1).Text
         If id1 <> "" Then
             found = False
             For k = 1 To nAll
@@ -373,7 +380,7 @@ Sub CompararHojas()
 
         r1 = 0
         For fila = 2 To lastRow1
-            If CStr(ws1.Cells(fila, colEmp1).Value) = empID Then
+            If ws1.Cells(fila, colEmp1).Text = empID Then
                 r1 = fila: Exit For
             End If
         Next fila
@@ -398,8 +405,8 @@ Sub CompararHojas()
             colC = (col - 1) * 2 + 2
             v1 = ""
             v2 = ""
-            If r1 > 0 And col <= lastCol1 Then v1 = CStr(ws1.Cells(r1, col).Value)
-            If r2 > 0 And col <= lastCol2 Then v2 = CStr(ws2.Cells(r2, col).Value)
+            If r1 > 0 And col <= lastCol1 Then v1 = ws1.Cells(r1, col).Text
+            If r2 > 0 And col <= lastCol2 Then v2 = ws2.Cells(r2, col).Text
             wsC.Cells(filaC, colC).Value = v1
             wsC.Cells(filaC, colC + 1).Value = v2
             If estado = "NO" And v1 <> v2 Then

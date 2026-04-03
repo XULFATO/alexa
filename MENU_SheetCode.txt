@@ -2,11 +2,14 @@
 '  CODIGO QUE VA EN EL MODULO DE LA HOJA "MENU"
 '  En el editor VBA: doble clic en la hoja MENU del arbol
 '  y pegar este codigo alli.
-'  Contrasena MENU: ABP
+'  Contrasena MENU: ADP
 ' ============================================================
 
 Private Sub Worksheet_Activate()
+    ' Desproteger libro brevemente para permitir
+    ' que el usuario pueda crear/borrar ALEXANDRA
     ActualizarBotonesSegunAlexandra
+    ' Volver a proteger estructura (impide borrar MENU)
 End Sub
 
 Private Sub Worksheet_SelectionChange(ByVal Target As Range)
@@ -19,9 +22,8 @@ End Sub
 Private Sub ActualizarBotonesSegunAlexandra()
 
     Dim ws As Worksheet
-    Set ws = Me  ' esta misma hoja MENU
+    Set ws = Me
 
-    ' Comprobar si existe pestana ALEXANDRA
     Dim bAlexandra As Boolean
     bAlexandra = False
     Dim wsTemp As Worksheet
@@ -32,7 +34,6 @@ Private Sub ActualizarBotonesSegunAlexandra()
         End If
     Next wsTemp
 
-    ' Buscar los botones
     Dim btn1 As Shape, btn2 As Shape
     On Error Resume Next
     Set btn1 = ws.Shapes("Btn1")
@@ -40,11 +41,9 @@ Private Sub ActualizarBotonesSegunAlexandra()
     On Error GoTo 0
     If btn1 Is Nothing Or btn2 Is Nothing Then Exit Sub
 
-    ' Desproteger MENU para modificar shapes
-    ws.Unprotect Password:="ABP"
+    ws.Unprotect Password:="ADP"
 
     If bAlexandra Then
-        ' Modo Proyecto A - naranja
         With btn1
             .TextFrame2.TextRange.Text = "Importar CSV"
             .Fill.ForeColor.RGB = RGB(210, 100, 20)
@@ -58,7 +57,6 @@ Private Sub ActualizarBotonesSegunAlexandra()
             .OnAction = "BotonImportar2"
         End With
     Else
-        ' Modo Proyecto B - azul
         With btn1
             .TextFrame2.TextRange.Text = "Importar fichero 1"
             .Fill.ForeColor.RGB = RGB(52, 110, 160)
@@ -73,7 +71,6 @@ Private Sub ActualizarBotonesSegunAlexandra()
         End With
     End If
 
-    ' Volver a proteger
-    ws.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+    ws.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
 
 End Sub

@@ -115,9 +115,9 @@ SigFila:
     ' Guardar nombre en J1 del MENU para CompararHojas
     Dim wsMenuCSV As Worksheet
     Set wsMenuCSV = ThisWorkbook.Worksheets("MENU")
-    wsMenuCSV.Unprotect Password:="ABP"
+    wsMenuCSV.Unprotect Password:="ADP"
     wsMenuCSV.Range("J1").Value = "Page 1 v1"
-    wsMenuCSV.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+    wsMenuCSV.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
 
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
@@ -280,9 +280,9 @@ SigFilaE:
     ' Guardar nombre en J2 del MENU para CompararHojas
     Dim wsMenuXLS As Worksheet
     Set wsMenuXLS = ThisWorkbook.Worksheets("MENU")
-    wsMenuXLS.Unprotect Password:="ABP"
+    wsMenuXLS.Unprotect Password:="ADP"
     wsMenuXLS.Range("J2").Value = "Page 1 v2"
-    wsMenuXLS.Protect Password:="ABP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+    wsMenuXLS.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
 
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
@@ -450,6 +450,7 @@ Private Function ObtenerOCrearHojaPageV(wb As Workbook, sNombre As String) As Wo
     Set ws = wb.Sheets(sNombre)
     On Error GoTo 0
     If ws Is Nothing Then
+        ' Desproteger libro para poder añadir hoja
         Set ws = wb.Sheets.Add(After:=wb.Sheets(wb.Sheets.Count))
         ws.Name = sNombre
     End If
