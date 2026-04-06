@@ -29,20 +29,52 @@ Option Explicit
 ' ============================================================
 
 Public Sub ImportarCSV()
-    ' Importa desde Excel (primera hoja) en vez de CSV
+    ' Importa desde un Excel abierto (primera hoja)
     ' Busca columna NISS y la renombra EMPLOYEE ID en la salida
 
-    Dim sRuta As String
-    sRuta = SeleccionarFicheroPageV("Selecciona el Excel Maestro", "Excel (*.xlsx;*.xls;*.xlsm),*.xlsx;*.xls;*.xlsm")
-    If sRuta = "" Then MsgBox "Cancelado.", vbInformation: Exit Sub
+    ' Listar libros abiertos excepto este
+    Dim nombres() As String
+    Dim wbLoop As Workbook
+    Dim n As Integer
+    n = 0
+    For Each wbLoop In Application.Workbooks
+        If wbLoop.Name <> ThisWorkbook.Name Then
+            ReDim Preserve nombres(n)
+            nombres(n) = wbLoop.Name
+            n = n + 1
+        End If
+    Next wbLoop
+
+    If n = 0 Then
+        MsgBox "No hay otros ficheros Excel abiertos." & vbCrLf & _
+               "Abre primero el Excel maestro.", vbExclamation
+        Exit Sub
+    End If
+
+    Dim lista As String
+    lista = "Ficheros Excel abiertos:" & vbCrLf & vbCrLf
+    Dim ii As Integer
+    For ii = 0 To n - 1
+        lista = lista & "  " & (ii + 1) & "  ->  " & nombres(ii) & vbCrLf
+    Next ii
+    lista = lista & vbCrLf & "Escribe el numero del fichero:"
+
+    Dim respWB As Variant
+    respWB = Application.InputBox(lista, "Importar Excel Maestro (Page 1 v1)", Type:=1)
+    If VarType(respWB) = vbBoolean Then Exit Sub
+
+    Dim idxWB As Integer
+    idxWB = CInt(respWB) - 1
+    If idxWB < 0 Or idxWB >= n Then
+        MsgBox "Numero fuera de rango.", vbExclamation: Exit Sub
+    End If
 
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     On Error GoTo ErrHandler
 
-    ' Abrir Excel origen, leer primera hoja
     Dim wbOrigen As Workbook
-    Set wbOrigen = Workbooks.Open(sRuta, ReadOnly:=True)
+    Set wbOrigen = Application.Workbooks(nombres(idxWB))
     Dim wsOrigen As Worksheet
     Set wsOrigen = wbOrigen.Sheets(1)
 
@@ -81,8 +113,7 @@ Public Sub ImportarCSV()
         Next hh
     End If
     If iNiss < 0 Then
-        wbOrigen.Close False
-        MsgBox "No se encontro columna NISS en el Excel origen.", vbCritical
+        MsgBox "No se encontro columna NISS en el Excel maestro.", vbCritical
         GoTo Salir
     End If
 
@@ -149,8 +180,7 @@ Public Sub ImportarCSV()
 SigFila:
     Next r
 
-    wbOrigen.Close False
-
+    ' Guardar nombre en J1 del MENU
     Dim wsMenu1 As Worksheet
     Set wsMenu1 = ThisWorkbook.Worksheets("MENU")
     wsMenu1.Unprotect Password:="ADP"
@@ -159,8 +189,8 @@ SigFila:
 
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
-    MsgBox "Excel importado: " & iSalida - 2 & " filas -> 'Page 1 v1'" & vbCrLf & _
-           "Columna NISS encontrada en col. " & iNiss + 1 & " -> renombrada EMPLOYEE ID", vbInformation
+    MsgBox "Importado: " & iSalida - 2 & " filas -> 'Page 1 v1'" & vbCrLf & _
+           "NISS encontrado en col. " & iNiss + 1 & " -> EMPLOYEE ID", vbInformation
     Exit Sub
 ErrHandler:
     Application.ScreenUpdating = True
@@ -169,11 +199,6 @@ ErrHandler:
 Salir:
 End Sub
 
-
-' ============================================================
-'  IMPORTAR EXCEL ESCLAVO -> Page 1 v2
-' ============================================================
-
 Public Sub ImportarExcel()
 
     Dim wsM As Worksheet
@@ -181,31 +206,55 @@ Public Sub ImportarExcel()
     Set wsM = ThisWorkbook.Sheets("Page 1 v1")
     On Error GoTo 0
     If wsM Is Nothing Then
-        MsgBox "Primero importa el CSV (Page 1 v1 no existe).", vbExclamation
+        MsgBox "Primero importa el Excel maestro (Page 1 v1 no existe).", vbExclamation
         Exit Sub
     End If
 
-    Dim sRuta As String
-    sRuta = SeleccionarFicheroPageV("Selecciona el Excel Esclavo", "Excel (*.xlsx;*.xls;*.xlsm),*.xlsx;*.xls;*.xlsm")
-    If sRuta = "" Then MsgBox "Cancelado.", vbInformation: Exit Sub
+    ' Listar libros abiertos excepto este
+    Dim nombres() As String
+    Dim wbLoop As Workbook
+    Dim n As Integer
+    n = 0
+    For Each wbLoop In Application.Workbooks
+        If wbLoop.Name <> ThisWorkbook.Name Then
+            ReDim Preserve nombres(n)
+            nombres(n) = wbLoop.Name
+            n = n + 1
+        End If
+    Next wbLoop
+
+    If n = 0 Then
+        MsgBox "No hay otros ficheros Excel abiertos." & vbCrLf & _
+               "Abre primero el Excel esclavo.", vbExclamation
+        Exit Sub
+    End If
+
+    Dim lista As String
+    lista = "Ficheros Excel abiertos:" & vbCrLf & vbCrLf
+    Dim ii As Integer
+    For ii = 0 To n - 1
+        lista = lista & "  " & (ii + 1) & "  ->  " & nombres(ii) & vbCrLf
+    Next ii
+    lista = lista & vbCrLf & "Escribe el numero del fichero:"
+
+    Dim respWB As Variant
+    respWB = Application.InputBox(lista, "Importar Excel Esclavo (Page 1 v2)", Type:=1)
+    If VarType(respWB) = vbBoolean Then Exit Sub
+
+    Dim idxWB As Integer
+    idxWB = CInt(respWB) - 1
+    If idxWB < 0 Or idxWB >= n Then
+        MsgBox "Numero fuera de rango.", vbExclamation: Exit Sub
+    End If
 
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     On Error GoTo ErrHandler
 
-    ' Leer headers de Page 1 v1
-    Dim nColsM As Long
-    nColsM = wsM.Cells(1, wsM.Columns.Count).End(xlToLeft).Column
-    Dim arrHdrM() As String
-    ReDim arrHdrM(0 To nColsM - 1)
-    Dim h As Long
-    For h = 0 To nColsM - 1
-        arrHdrM(h) = Trim(CStr(wsM.Cells(1, h + 1).Value))
-    Next h
-
-    ' Abrir esclavo, buscar hoja Data
     Dim wbE As Workbook
-    Set wbE = Workbooks.Open(sRuta, ReadOnly:=True)
+    Set wbE = Application.Workbooks(nombres(idxWB))
+
+    ' Buscar hoja Data, si no existe usar la primera
     Dim wsD As Worksheet
     Dim wsTemp As Worksheet
     For Each wsTemp In wbE.Sheets
@@ -219,9 +268,18 @@ Public Sub ImportarExcel()
     Dim iFilaCod As Long
     iFilaCod = BuscarFilaCodigosPageV(wsD)
     If iFilaCod < 0 Then
-        wbE.Close False
-        MsgBox "No se encontro fila de codigos (Axxx) en el Esclavo.", vbCritical: GoTo Salir
+        MsgBox "No se encontro fila de codigos (Axxx) en el Esclavo.", vbCritical
+        GoTo Salir
     End If
+
+    Dim nColsM As Long
+    nColsM = wsM.Cells(1, wsM.Columns.Count).End(xlToLeft).Column
+    Dim arrHdrM() As String
+    ReDim arrHdrM(0 To nColsM - 1)
+    Dim h As Long
+    For h = 0 To nColsM - 1
+        arrHdrM(h) = Trim(CStr(wsM.Cells(1, h + 1).Value))
+    Next h
 
     Dim nColsE As Long
     nColsE = wsD.UsedRange.Columns.Count
@@ -297,10 +355,9 @@ Public Sub ImportarExcel()
             iCE = arrMap(j)
             If iCE > 0 Then
                 If EsColumnaDecimal(arrCodE(iCE)) Then
-                    ' Leer .Value directamente: Excel ya lo tiene como Double correcto
                     Dim dValE As Double
                     If IsNumeric(wsD.Cells(rE, iCE).Value) Then
-                        dValE = wsD.Cells(rE, iCE).Value  ' asignacion directa, sin CDbl ni CStr
+                        dValE = wsD.Cells(rE, iCE).Value
                     Else
                         dValE = ConvertirDecimalCSV(Trim(CStr(wsD.Cells(rE, iCE).Value)))
                     End If
@@ -310,11 +367,9 @@ Public Sub ImportarExcel()
                     Dim sValXLS As String
                     sValXLS = Trim(CStr(wsD.Cells(rE, iCE).Value))
                     If IsNumeric(wsD.Cells(rE, iCE).Value) And Left(sValXLS, 1) <> "0" Then
-                        ' Numerico sin ceros iniciales: escribir como numero
                         wsE.Cells(iSal, j + 1).NumberFormat = "General"
-                        wsE.Cells(iSal, j + 1).Value = CDbl(wsD.Cells(rE, iCE).Value)
+                        wsE.Cells(iSal, j + 1).Value = wsD.Cells(rE, iCE).Value
                     Else
-                        ' Texto o tiene ceros iniciales: preservar como texto
                         wsE.Cells(iSal, j + 1).NumberFormat = "@"
                         wsE.Cells(iSal, j + 1).Value = sValXLS
                     End If
@@ -325,9 +380,7 @@ Public Sub ImportarExcel()
 SigFilaE:
     Next rE
 
-    wbE.Close False
-
-    ' Guardar nombre en J2 del MENU para CompararHojas
+    ' Guardar nombre en J2 del MENU
     Dim wsMenuXLS As Worksheet
     Set wsMenuXLS = ThisWorkbook.Worksheets("MENU")
     wsMenuXLS.Unprotect Password:="ADP"
@@ -336,7 +389,7 @@ SigFilaE:
 
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
-    MsgBox "Excel importado: " & iSal - 2 & " filas -> 'Page 1 v2'" & vbCrLf & _
+    MsgBox "Importado: " & iSal - 2 & " filas -> 'Page 1 v2'" & vbCrLf & _
            "Col. NIC Code: " & iNicCol & "  |  Fila codigos: " & iFilaCod, vbInformation
     Exit Sub
 ErrHandler:
@@ -345,6 +398,7 @@ ErrHandler:
     MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
 Salir:
 End Sub
+
 
 ' ============================================================
 '  HELPERS PRIVADOS (con sufijo PageV para evitar conflictos)
