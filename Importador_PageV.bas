@@ -322,6 +322,7 @@ Public Sub ImportarExcel()
     iUltima = wsD.Cells(wsD.Rows.Count, iNicCol).End(xlUp).Row
     Dim iSal As Long
     iSal = 2
+    Dim iCE As Long
     Dim rE As Long
     For rE = 6 To iUltima
         If Len(Trim(CStr(wsD.Cells(rE, iNicCol).Value))) = 0 Then GoTo SigFilaE
