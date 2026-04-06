@@ -29,42 +29,74 @@ Option Explicit
 ' ============================================================
 
 Public Sub ImportarCSV()
+    ' Importa desde Excel (primera hoja) en vez de CSV
+    ' Busca columna NISS y la renombra EMPLOYEE ID en la salida
 
     Dim sRuta As String
-    sRuta = SeleccionarFicheroPageV("Selecciona el CSV Maestro", "CSV (*.csv),*.csv")
+    sRuta = SeleccionarFicheroPageV("Selecciona el Excel Maestro", "Excel (*.xlsx;*.xls;*.xlsm),*.xlsx;*.xls;*.xlsm")
     If sRuta = "" Then MsgBox "Cancelado.", vbInformation: Exit Sub
 
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     On Error GoTo ErrHandler
 
-    Dim arrLineas() As String
-    Dim nFilas As Long
-    arrLineas = LeerCSV(sRuta, nFilas)
+    ' Abrir Excel origen, leer primera hoja
+    Dim wbOrigen As Workbook
+    Set wbOrigen = Workbooks.Open(sRuta, ReadOnly:=True)
+    Dim wsOrigen As Worksheet
+    Set wsOrigen = wbOrigen.Sheets(1)
 
+    ' Buscar fila de headers (primera fila no vacia)
     Dim iHdr As Long
-    iHdr = BuscarFilaHeaderPageV(arrLineas, nFilas)
-    If iHdr < 0 Then MsgBox "No se encontro header en el CSV.", vbCritical: GoTo Salir
+    iHdr = 1
+    Do While iHdr <= 10
+        If Len(Trim(CStr(wsOrigen.Cells(iHdr, 1).Value))) > 0 Then Exit Do
+        iHdr = iHdr + 1
+    Loop
 
-    arrLineas(iHdr) = LimpiarBOM(arrLineas(iHdr))
-    Dim arrHdr() As String
-    arrHdr = SplitCSVLine(arrLineas(iHdr))
+    ' Leer headers
     Dim nCols As Long
-    nCols = UBound(arrHdr) + 1
+    nCols = wsOrigen.Cells(iHdr, wsOrigen.Columns.Count).End(xlToLeft).Column
+    Dim arrHdr() As String
+    ReDim arrHdr(0 To nCols - 1)
     Dim h As Long
     For h = 0 To nCols - 1
-        arrHdr(h) = LimpiarBOM(Trim(arrHdr(h)))
+        arrHdr(h) = Trim(CStr(wsOrigen.Cells(iHdr, h + 1).Value))
     Next h
 
+    ' Buscar columna NISS
+    Dim iNiss As Long
+    iNiss = -1
+    Dim hh As Long
+    For hh = 0 To nCols - 1
+        If UCase(Trim(arrHdr(hh))) = "NISS" Then
+            iNiss = hh: Exit For
+        End If
+    Next hh
+    If iNiss < 0 Then
+        For hh = 0 To nCols - 1
+            If InStr(UCase(arrHdr(hh)), "NISS") > 0 Then
+                iNiss = hh: Exit For
+            End If
+        Next hh
+    End If
+    If iNiss < 0 Then
+        wbOrigen.Close False
+        MsgBox "No se encontro columna NISS en el Excel origen.", vbCritical
+        GoTo Salir
+    End If
+
+    ' Preparar hoja Page 1 v1
     Dim ws As Worksheet
     Set ws = ObtenerOCrearHojaPageV(ThisWorkbook, "Page 1 v1")
     ws.Cells.ClearContents
     ws.Cells.NumberFormat = "@"
 
+    ' Escribir headers
     Dim j As Long
     For j = 0 To nCols - 1
         ws.Cells(1, j + 1).NumberFormat = "General"
-        If j = 0 Then
+        If j = iNiss Then
             ws.Cells(1, j + 1).Value = "EMPLOYEE ID"
         Else
             ws.Cells(1, j + 1).Value = arrHdr(j)
@@ -79,34 +111,37 @@ Public Sub ImportarCSV()
     Next j
     ws.Rows(1).Font.Bold = True
 
+    ' Volcar datos
+    Dim iUltima As Long
+    iUltima = wsOrigen.Cells(wsOrigen.Rows.Count, iNiss + 1).End(xlUp).Row
+
     Dim iSalida As Long
     iSalida = 2
     Dim r As Long
-    For r = iHdr + 1 To nFilas - 1
-        If Len(Trim(arrLineas(r))) = 0 Then GoTo SigFila
-        Dim arrFila() As String
-        arrFila = SplitCSVLine(arrLineas(r))
+    For r = iHdr + 1 To iUltima
+        If Len(Trim(CStr(wsOrigen.Cells(r, iNiss + 1).Value))) = 0 Then GoTo SigFila
         For j = 0 To nCols - 1
-            If j <= UBound(arrFila) Then
-                Dim sCodD As String
-                sCodD = arrHdr(j)
-                If UCase(Left(sCodD, 1)) = "C" Then sCodD = Mid(sCodD, 2)
-                ' DEBUG: descomentar para ver que codigo llega
-                ' MsgBox "Col " & j & " codigo=[" & sCodD & "] decimal=" & EsColumnaDecimal(sCodD)
-                If EsColumnaDecimal(sCodD) Then
-                    Dim sNum As String
-                    sNum = Replace(arrFila(j), ",", ".")
-                    If IsNumeric(sNum) Then
-                        ws.Cells(iSalida, j + 1).NumberFormat = "0.00"
-                        ws.Cells(iSalida, j + 1).Value = CDbl(sNum)
-                    Else
-                        ws.Cells(iSalida, j + 1).NumberFormat = "@"
-                        ws.Cells(iSalida, j + 1).Value = arrFila(j)
-                    End If
+            Dim sCodD As String
+            sCodD = arrHdr(j)
+            If UCase(Left(sCodD, 1)) = "C" Then sCodD = Mid(sCodD, 2)
+            If EsColumnaDecimal(sCodD) Then
+                Dim dNum As Double
+                If IsNumeric(wsOrigen.Cells(r, j + 1).Value) Then
+                    dNum = wsOrigen.Cells(r, j + 1).Value
                 Else
-                    ' Forzar texto para preservar ceros iniciales
+                    dNum = ConvertirDecimalCSV(Trim(CStr(wsOrigen.Cells(r, j + 1).Value)))
+                End If
+                ws.Cells(iSalida, j + 1).NumberFormat = "0.00"
+                ws.Cells(iSalida, j + 1).Value = dNum
+            Else
+                Dim sVal As String
+                sVal = Trim(CStr(wsOrigen.Cells(r, j + 1).Value))
+                If IsNumeric(wsOrigen.Cells(r, j + 1).Value) And Left(sVal, 1) <> "0" Then
+                    ws.Cells(iSalida, j + 1).NumberFormat = "General"
+                    ws.Cells(iSalida, j + 1).Value = wsOrigen.Cells(r, j + 1).Value
+                Else
                     ws.Cells(iSalida, j + 1).NumberFormat = "@"
-                    ws.Cells(iSalida, j + 1).Value = arrFila(j)
+                    ws.Cells(iSalida, j + 1).Value = sVal
                 End If
             End If
         Next j
@@ -114,16 +149,18 @@ Public Sub ImportarCSV()
 SigFila:
     Next r
 
-    ' Guardar nombre en J1 del MENU para CompararHojas
-    Dim wsMenuCSV As Worksheet
-    Set wsMenuCSV = ThisWorkbook.Worksheets("MENU")
-    wsMenuCSV.Unprotect Password:="ADP"
-    wsMenuCSV.Range("J1").Value = "Page 1 v1"
-    wsMenuCSV.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
+    wbOrigen.Close False
+
+    Dim wsMenu1 As Worksheet
+    Set wsMenu1 = ThisWorkbook.Worksheets("MENU")
+    wsMenu1.Unprotect Password:="ADP"
+    wsMenu1.Range("J1").Value = "Page 1 v1"
+    wsMenu1.Protect Password:="ADP", DrawingObjects:=False, Contents:=True, Scenarios:=True
 
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
-    MsgBox "CSV importado: " & iSalida - 2 & " filas -> 'Page 1 v1'", vbInformation
+    MsgBox "Excel importado: " & iSalida - 2 & " filas -> 'Page 1 v1'" & vbCrLf & _
+           "Columna NISS encontrada en col. " & iNiss + 1 & " -> renombrada EMPLOYEE ID", vbInformation
     Exit Sub
 ErrHandler:
     Application.ScreenUpdating = True
@@ -131,6 +168,7 @@ ErrHandler:
     MsgBox "Error " & Err.Number & ": " & Err.Description, vbCritical
 Salir:
 End Sub
+
 
 ' ============================================================
 '  IMPORTAR EXCEL ESCLAVO -> Page 1 v2
@@ -259,19 +297,27 @@ Public Sub ImportarExcel()
             iCE = arrMap(j)
             If iCE > 0 Then
                 If EsColumnaDecimal(arrCodE(iCE)) Then
-                    Dim sNumE As String
-                    sNumE = Replace(Trim(CStr(wsD.Cells(rE, iCE).Value)), ",", ".")
-                    If IsNumeric(sNumE) Then
-                        wsE.Cells(iSal, j + 1).NumberFormat = "0.00"
-                        wsE.Cells(iSal, j + 1).Value = CDbl(sNumE)
+                    ' Leer .Value directamente: Excel ya lo tiene como Double correcto
+                    Dim dValE As Double
+                    If IsNumeric(wsD.Cells(rE, iCE).Value) Then
+                        dValE = wsD.Cells(rE, iCE).Value  ' asignacion directa, sin CDbl ni CStr
                     Else
-                        wsE.Cells(iSal, j + 1).NumberFormat = "@"
-                        wsE.Cells(iSal, j + 1).Value = Trim(CStr(wsD.Cells(rE, iCE).Value))
+                        dValE = ConvertirDecimalCSV(Trim(CStr(wsD.Cells(rE, iCE).Value)))
                     End If
+                    wsE.Cells(iSal, j + 1).NumberFormat = "0.00"
+                    wsE.Cells(iSal, j + 1).Value = dValE
                 Else
-                    ' Forzar texto para preservar ceros iniciales
-                    wsE.Cells(iSal, j + 1).NumberFormat = "@"
-                    wsE.Cells(iSal, j + 1).Value = Trim(CStr(wsD.Cells(rE, iCE).Value))
+                    Dim sValXLS As String
+                    sValXLS = Trim(CStr(wsD.Cells(rE, iCE).Value))
+                    If IsNumeric(wsD.Cells(rE, iCE).Value) And Left(sValXLS, 1) <> "0" Then
+                        ' Numerico sin ceros iniciales: escribir como numero
+                        wsE.Cells(iSal, j + 1).NumberFormat = "General"
+                        wsE.Cells(iSal, j + 1).Value = CDbl(wsD.Cells(rE, iCE).Value)
+                    Else
+                        ' Texto o tiene ceros iniciales: preservar como texto
+                        wsE.Cells(iSal, j + 1).NumberFormat = "@"
+                        wsE.Cells(iSal, j + 1).Value = sValXLS
+                    End If
                 End If
             End If
         Next j
@@ -303,6 +349,31 @@ End Sub
 ' ============================================================
 '  HELPERS PRIVADOS (con sufijo PageV para evitar conflictos)
 ' ============================================================
+
+Private Function ConvertirDecimalCSV(sVal As String) As Double
+    ' Convierte string con coma decimal (formato europeo CSV) a Double
+    ' sin depender de la configuracion regional de VBA/Windows
+    ' Ejemplo: "2024,10" -> 2024.1  /  "0,60" -> 0.6
+    If Len(sVal) = 0 Then ConvertirDecimalCSV = 0: Exit Function
+    Dim posComa As Integer
+    posComa = InStr(sVal, ",")
+    If posComa > 0 Then
+        ' Tiene coma: separar parte entera y decimal
+        Dim sEntero As String, sDecimal As String
+        sEntero  = Left(sVal, posComa - 1)
+        sDecimal = Mid(sVal, posComa + 1)
+        If Len(sEntero) = 0 Then sEntero = "0"
+        If Not IsNumeric(sEntero) Or Not IsNumeric(sDecimal) Then
+            ConvertirDecimalCSV = 0: Exit Function
+        End If
+        ConvertirDecimalCSV = CDbl(CLng(sEntero)) + CDbl(CLng(sDecimal)) / (10 ^ Len(sDecimal))
+    ElseIf IsNumeric(sVal) Then
+        ' Sin coma: entero o punto decimal anglosaxon
+        ConvertirDecimalCSV = CDbl(Val(sVal))
+    Else
+        ConvertirDecimalCSV = 0
+    End If
+End Function
 
 Private Function EsColumnaDecimal(sCodigo As String) As Boolean
     Select Case UCase(Trim(sCodigo))
