@@ -132,13 +132,6 @@ Public Sub ImportarCSV()
         Else
             ws.Cells(1, j + 1).Value = arrHdr(j)
         End If
-        Dim sCod As String
-        sCod = arrHdr(j)
-        If UCase(Left(sCod, 1)) = "C" Then sCod = Mid(sCod, 2)
-        If EsColumnaDecimal(sCod) Then
-            ws.Columns(j + 1).NumberFormat = "0.00"
-            ws.Cells(1, j + 1).NumberFormat = "General"
-        End If
     Next j
     ws.Rows(1).Font.Bold = True
 
@@ -155,25 +148,14 @@ Public Sub ImportarCSV()
             Dim sCodD As String
             sCodD = arrHdr(j)
             If UCase(Left(sCodD, 1)) = "C" Then sCodD = Mid(sCodD, 2)
-            If EsColumnaDecimal(sCodD) Then
-                Dim dNum As Double
-                If IsNumeric(wsOrigen.Cells(r, j + 1).Value) Then
-                    dNum = wsOrigen.Cells(r, j + 1).Value
-                Else
-                    dNum = ConvertirDecimalCSV(Trim(CStr(wsOrigen.Cells(r, j + 1).Value)))
-                End If
-                ws.Cells(iSalida, j + 1).NumberFormat = "0.00"
-                ws.Cells(iSalida, j + 1).Value = dNum
+            Dim sVal As String
+            sVal = Trim(CStr(wsOrigen.Cells(r, j + 1).Value))
+            If IsNumeric(wsOrigen.Cells(r, j + 1).Value) And Left(sVal, 1) <> "0" Then
+                ws.Cells(iSalida, j + 1).NumberFormat = "General"
+                ws.Cells(iSalida, j + 1).Value = wsOrigen.Cells(r, j + 1).Value
             Else
-                Dim sVal As String
-                sVal = Trim(CStr(wsOrigen.Cells(r, j + 1).Value))
-                If IsNumeric(wsOrigen.Cells(r, j + 1).Value) And Left(sVal, 1) <> "0" Then
-                    ws.Cells(iSalida, j + 1).NumberFormat = "General"
-                    ws.Cells(iSalida, j + 1).Value = wsOrigen.Cells(r, j + 1).Value
-                Else
-                    ws.Cells(iSalida, j + 1).NumberFormat = "@"
-                    ws.Cells(iSalida, j + 1).Value = sVal
-                End If
+                ws.Cells(iSalida, j + 1).NumberFormat = "@"
+                ws.Cells(iSalida, j + 1).Value = sVal
             End If
         Next j
         iSalida = iSalida + 1
@@ -332,14 +314,6 @@ Public Sub ImportarExcel()
     For j = 0 To nColsM - 1
         wsE.Cells(1, j + 1).NumberFormat = "General"
         wsE.Cells(1, j + 1).Value = arrHdrM(j)
-        Dim iCE As Long
-        iCE = arrMap(j)
-        If iCE > 0 Then
-            If EsColumnaDecimal(arrCodE(iCE)) Then
-                wsE.Columns(j + 1).NumberFormat = "0.00"
-                wsE.Cells(1, j + 1).NumberFormat = "General"
-            End If
-        End If
     Next j
     wsE.Rows(1).Font.Bold = True
 
@@ -354,25 +328,14 @@ Public Sub ImportarExcel()
         For j = 0 To nColsM - 1
             iCE = arrMap(j)
             If iCE > 0 Then
-                If EsColumnaDecimal(arrCodE(iCE)) Then
-                    Dim dValE As Double
-                    If IsNumeric(wsD.Cells(rE, iCE).Value) Then
-                        dValE = wsD.Cells(rE, iCE).Value
-                    Else
-                        dValE = ConvertirDecimalCSV(Trim(CStr(wsD.Cells(rE, iCE).Value)))
-                    End If
-                    wsE.Cells(iSal, j + 1).NumberFormat = "0.00"
-                    wsE.Cells(iSal, j + 1).Value = dValE
+                Dim sValXLS As String
+                sValXLS = Trim(CStr(wsD.Cells(rE, iCE).Value))
+                If IsNumeric(wsD.Cells(rE, iCE).Value) And Left(sValXLS, 1) <> "0" Then
+                    wsE.Cells(iSal, j + 1).NumberFormat = "General"
+                    wsE.Cells(iSal, j + 1).Value = wsD.Cells(rE, iCE).Value
                 Else
-                    Dim sValXLS As String
-                    sValXLS = Trim(CStr(wsD.Cells(rE, iCE).Value))
-                    If IsNumeric(wsD.Cells(rE, iCE).Value) And Left(sValXLS, 1) <> "0" Then
-                        wsE.Cells(iSal, j + 1).NumberFormat = "General"
-                        wsE.Cells(iSal, j + 1).Value = wsD.Cells(rE, iCE).Value
-                    Else
-                        wsE.Cells(iSal, j + 1).NumberFormat = "@"
-                        wsE.Cells(iSal, j + 1).Value = sValXLS
-                    End If
+                    wsE.Cells(iSal, j + 1).NumberFormat = "@"
+                    wsE.Cells(iSal, j + 1).Value = sValXLS
                 End If
             End If
         Next j
@@ -404,39 +367,9 @@ End Sub
 '  HELPERS PRIVADOS (con sufijo PageV para evitar conflictos)
 ' ============================================================
 
-Private Function ConvertirDecimalCSV(sVal As String) As Double
-    ' Convierte string con coma decimal (formato europeo CSV) a Double
-    ' sin depender de la configuracion regional de VBA/Windows
-    ' Ejemplo: "2024,10" -> 2024.1  /  "0,60" -> 0.6
-    If Len(sVal) = 0 Then ConvertirDecimalCSV = 0: Exit Function
-    Dim posComa As Integer
-    posComa = InStr(sVal, ",")
-    If posComa > 0 Then
-        ' Tiene coma: separar parte entera y decimal
-        Dim sEntero As String, sDecimal As String
-        sEntero  = Left(sVal, posComa - 1)
-        sDecimal = Mid(sVal, posComa + 1)
-        If Len(sEntero) = 0 Then sEntero = "0"
-        If Not IsNumeric(sEntero) Or Not IsNumeric(sDecimal) Then
-            ConvertirDecimalCSV = 0: Exit Function
-        End If
-        ConvertirDecimalCSV = CDbl(CLng(sEntero)) + CDbl(CLng(sDecimal)) / (10 ^ Len(sDecimal))
-    ElseIf IsNumeric(sVal) Then
-        ' Sin coma: entero o punto decimal anglosaxon
-        ConvertirDecimalCSV = CDbl(Val(sVal))
-    Else
-        ConvertirDecimalCSV = 0
-    End If
-End Function
 
-Private Function EsColumnaDecimal(sCodigo As String) As Boolean
-    Select Case UCase(Trim(sCodigo))
-        Case "B357", "B001"
-            EsColumnaDecimal = True
-        Case Else
-            EsColumnaDecimal = False
-    End Select
-End Function
+
+
 
 Private Function LimpiarBOM(s As String) As String
     Dim sBOM As String
