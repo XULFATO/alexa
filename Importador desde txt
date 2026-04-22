@@ -1,6 +1,6 @@
 Option Explicit
 
-Sub ImportarArchivoAnchoFijo_V2()
+Sub ImportarArchivoAnchoFijo_Corregido()
     Dim rutaArchivo As Variant
     Dim linea As String
     Dim empID As String, empIDPrevio As String
@@ -8,13 +8,12 @@ Sub ImportarArchivoAnchoFijo_V2()
     Dim filaDestino As Long, colDestino As Long
     Dim ws As Worksheet
     Dim dicColumnas As Object
-    Dim colBusqueda As Variant
     
-    ' 1. Pedir la ruta del fichero
+    ' 1. Selección de archivo
     rutaArchivo = Application.GetOpenFilename("Archivos de texto (*.txt; *.dat), *.txt; *.dat", , "Seleccione el fichero")
     If rutaArchivo = False Then Exit Sub
     
-    ' 2. Gestionar la hoja "Page 1 v1"
+    ' 2. Preparar Hoja "Page 1 v1"
     On Error Resume Next
     Set ws = ThisWorkbook.Worksheets("Page 1 v1")
     On Error GoTo 0
@@ -26,64 +25,72 @@ Sub ImportarArchivoAnchoFijo_V2()
         ws.Cells.Clear
     End If
     
-    ' Forzar que toda la hoja sea tratada como texto para conservar ceros a la izquierda
+    ' Formato texto GLOBAL para evitar que 000001 sea 1
     ws.Cells.NumberFormat = "@"
     
-    ' Configuración inicial
     Set dicColumnas = CreateObject("Scripting.Dictionary")
-    filaDestino = 1 ' Empezará en la 2 tras el primer cambio de ID
+    ' Reservamos la columna 1 para el ID
+    dicColumnas.Add "EMPLOYEE_ID", 1
+    ws.Cells(1, 1).Value = "EMPLOYEE_ID"
+    
+    filaDestino = 1 ' Empezaremos en la 2
     empIDPrevio = ""
     
-    ' 3. Abrir y leer el fichero
+    ' 3. Lectura
     Open rutaArchivo For Input As #1
     
     Do While Not EOF(1)
         Line Input #1, linea
         
-        ' Ajustamos según tu descripción y lo visto en la foto:
-        ' Posición 11 a 18 (8 caracteres): Employee ID
-        ' Posición 25 a 56 (32 caracteres): Valor
-        ' Posición 150 a 154 (5 caracteres): Nombre Columna
-        
+        ' IMPORTANTE: Verificamos que la línea sea larga (mínimo hasta la cabecera pos 150)
         If Len(linea) >= 154 Then
-            empID = Trim(Mid(linea, 11, 8))
-            valorCol = Trim(Mid(linea, 25, 32))
-            nombreCol = Trim(Mid(linea, 150, 5))
             
-            ' Si el ID cambia, bajamos de fila
+            ' Extraer y limpiar espacios y carácteres raros
+            empID = Trim(Replace(Mid(linea, 11, 8), vbTab, ""))
+            valorCol = Trim(Replace(Mid(linea, 25, 32), vbTab, ""))
+            nombreCol = Trim(Replace(Mid(linea, 150, 5), vbTab, ""))
+            
+            ' Si la línea está vacía de datos reales, saltamos
+            If empID = "" Then GoTo SiguienteLinea
+            
+            ' Lógica de cambio de fila (Nuevo Empleado)
             If empID <> empIDPrevio Then
                 filaDestino = filaDestino + 1
-                
-                ' Asegurar que la primera columna sea siempre el ID
-                If Not dicColumnas.Exists("EMPLOYEE_ID") Then
-                    dicColumnas.Add "EMPLOYEE_ID", 1
-                    ws.Cells(1, 1).Value = "EMPLOYEE_ID"
-                End If
-                
                 ws.Cells(filaDestino, 1).Value = empID
                 empIDPrevio = empID
             End If
             
-            ' Gestionar las columnas de datos
+            ' Lógica de Columnas Dinámicas
             If nombreCol <> "" Then
                 If Not dicColumnas.Exists(nombreCol) Then
-                    ' Si la columna no existe, la creamos al final
+                    ' Crear nueva cabecera si no existe
                     colDestino = dicColumnas.Count + 1
                     dicColumnas.Add nombreCol, colDestino
                     ws.Cells(1, colDestino).Value = nombreCol
                 Else
-                    ' Si ya existe, recuperamos su número de columna
+                    ' Usar columna existente
                     colDestino = dicColumnas(nombreCol)
                 End If
                 
-                ' Escribimos el valor en la fila actual y columna correspondiente
+                ' Escribir el valor en la fila del empleado actual
                 ws.Cells(filaDestino, colDestino).Value = valorCol
             End If
         End If
+        
+SiguienteLinea:
     Loop
     
     Close #1
     
+    ' 4. Ajustes finales
+    ws.Rows(1).Font.Bold = True
+    ws.Columns.AutoFit
+    
+    MsgBox "Importación finalizada en 'Page 1 v1'." & vbCrLf & _
+           "Filas: " & (filaDestino - 1) & vbCrLf & _
+           "Columnas: " & dicColumnas.Count, vbInformation
+End Sub
+
     ' Formateo final
     ws.Rows(1).Font.Bold = True
     ws.Columns.AutoFit
