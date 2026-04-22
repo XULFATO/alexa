@@ -1,0 +1,74 @@
+Option Explicit
+
+Sub ImportarArchivoAnchoFijo()
+    Dim rutaArchivo As Variant
+    Dim linea As String
+    Dim empID As String, empIDPrevio As String
+    Dim nombreCol As String, valorCol As String
+    Dim filaDestino As Long, colDestino As Long
+    Dim ws As Worksheet
+    Dim dicColumnas As Object
+    
+    ' 1. Pedir la ruta del fichero
+    rutaArchivo = Application.GetOpenFilename("Archivos de texto (*.txt; *.dat), *.txt; *.dat", , "Seleccione el fichero de importación")
+    If rutaArchivo = False Then Exit Sub
+    
+    ' Configuración inicial
+    Set ws = ThisWorkbook.ActiveSheet
+    ws.Cells.Clear ' Limpiamos la hoja actual
+    Set dicColumnas = CreateObject("Scripting.Dictionary")
+    
+    filaDestino = 1
+    empIDPrevio = ""
+    
+    ' 2. Abrir y leer el fichero
+    Open rutaArchivo For Input As #1
+    
+    Do While Not EOF(1)
+        Line Input #1, linea
+        
+        ' Validar que la línea tenga longitud mínima para evitar errores
+        If Len(linea) >= 154 Then
+            
+            ' Extraer datos según posiciones (ajustar si el índice empieza en 0 o 1)
+            ' Mid(cadena, inicio, longitud)
+            empID = Trim(Mid(linea, 11, 8))
+            valorCol = Trim(Mid(linea, 25, 32)) ' 56 - 25 + 1 = 32 caracteres
+            nombreCol = Trim(Mid(linea, 150, 5))
+            
+            ' 3. Comprobar si ha cambiado el Employee ID
+            If empID <> empIDPrevio Then
+                filaDestino = filaDestino + 1
+                ' Ponemos el ID en la primera columna siempre
+                If filaDestino = 2 Then 
+                    ws.Cells(1, 1).Value = "EMPLOYEE_ID"
+                    dicColumnas.Add "EMPLOYEE_ID", 1
+                End If
+                ws.Cells(filaDestino, 1).Value = empID
+                empIDPrevio = empID
+            End If
+            
+            ' 4. Gestión de Columnas Dinámicas
+            ' Si la columna no existe en nuestro diccionario, la creamos
+            If Not dicColumnas.Exists(nombreCol) Then
+                colDestino = dicColumnas.Count + 1
+                dicColumnas.Add nombreCol, colDestino
+                ws.Cells(1, colDestino).Value = nombreCol
+            Else
+                colDestino = dicColumnas(nombreCol)
+            End If
+            
+            ' 5. Escribir el valor en la celda correspondiente
+            ws.Cells(filaDestino, colDestino).Value = valorCol
+            
+        End If
+    Loop
+    
+    Close #1
+    
+    ' Formateo básico
+    ws.Rows(1).Font.Bold = True
+    ws.Columns.AutoFit
+    
+    MsgBox "Importación finalizada con éxito.", vbInformation
+End Sub
